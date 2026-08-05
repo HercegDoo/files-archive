@@ -13,6 +13,24 @@ function Test-ConfigProperty {
     )
 }
 
+function Resolve-ArchivePath {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [string]$BaseDirectory
+    )
+
+    $TrimmedPath = ([string]$Path).TrimEnd("\", "/")
+
+    if ([System.IO.Path]::IsPathRooted($TrimmedPath)) {
+        return [System.IO.Path]::GetFullPath($TrimmedPath)
+    }
+
+    return [System.IO.Path]::GetFullPath((Join-Path $BaseDirectory $TrimmedPath))
+}
+
 function Import-ArchiveConfig {
     param(
         [Parameter(Mandatory)]
@@ -31,42 +49,87 @@ function Import-ArchiveConfig {
         throw "Config nije ispravan JSON: $($_.Exception.Message)"
     }
 
-    if (
-        -not (Test-ConfigProperty $Config "BasePath") -or
-        [string]::IsNullOrWhiteSpace([string]$Config.BasePath)
-    ) {
-        throw "Config mora sadržavati BasePath."
+    $ConfigDirectory = Split-Path -Parent $Path
+    $HasBasePath = (
+        (Test-ConfigProperty $Config "BasePath") -and
+        -not [string]::IsNullOrWhiteSpace([string]$Config.BasePath)
+    )
+    $HasTargets = (
+        (Test-ConfigProperty $Config "Targets") -and
+        @($Config.Targets).Count -gt 0
+    )
+
+    if (-not $HasBasePath -and -not $HasTargets) {
+        throw "Config mora sadrzavati Targets ili BasePath."
     }
 
-    $Config.BasePath = ([string]$Config.BasePath).TrimEnd("\", "/")
+    if ($HasBasePath) {
+        $Config.BasePath = Resolve-ArchivePath -Path $Config.BasePath -BaseDirectory $ConfigDirectory
 
-    if (-not (Test-Path -LiteralPath $Config.BasePath -PathType Container)) {
-        throw "BasePath ne postoji: $($Config.BasePath)"
+        if (-not (Test-Path -LiteralPath $Config.BasePath -PathType Container)) {
+            throw "BasePath ne postoji: $($Config.BasePath)"
+        }
+    }
+
+    if ($HasTargets) {
+        foreach ($Target in @($Config.Targets)) {
+            if (
+                -not (Test-ConfigProperty $Target "Path") -or
+                [string]::IsNullOrWhiteSpace([string]$Target.Path)
+            ) {
+                throw "Svaki Targets unos mora sadrzavati Path."
+            }
+
+            $Target.Path = Resolve-ArchivePath -Path $Target.Path -BaseDirectory $ConfigDirectory
+
+            if (-not (Test-Path -LiteralPath $Target.Path -PathType Container)) {
+                throw "Target putanja ne postoji: $($Target.Path)"
+            }
+        }
     }
 
     return $Config
 }
 
-function Get-MachineConfig {
+function Get-ArchiveTargets {
     param(
         [Parameter(Mandatory)]
-        [string]$MachineName,
-
-        [AllowNull()]
-        [object[]]$Machines
+        [object]$Config
     )
 
-    if ($null -eq $Machines) {
-        return $null
+    if (
+        (Test-ConfigProperty $Config "Targets") -and
+        @($Config.Targets).Count -gt 0
+    ) {
+        return @($Config.Targets)
     }
 
-    return $Machines |
-        Where-Object {
-            (Test-ConfigProperty $_ "Name") -and
-            ([string]$_.Name).Equals(
-                $MachineName,
-                [System.StringComparison]::OrdinalIgnoreCase
-            )
-        } |
-        Select-Object -First 1
+    return @(
+        [PSCustomObject]@{
+            Name = "Default"
+            Path = $Config.BasePath
+        }
+    )
+}
+
+function Get-ArchiveTargetName {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Target
+    )
+
+    if (
+        (Test-ConfigProperty $Target "Name") -and
+        -not [string]::IsNullOrWhiteSpace([string]$Target.Name)
+    ) {
+        return [string]$Target.Name
+    }
+
+    $LeafName = Split-Path -Path ([string]$Target.Path) -Leaf
+
+    if (-not [string]::IsNullOrWhiteSpace($LeafName)) {
+        return $LeafName
+    }
+
+    return [string]$Target.Path
 }

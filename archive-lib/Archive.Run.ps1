@@ -32,10 +32,10 @@ function Add-ArchiveResult {
     $Target.Errors += $Source.Errors
 }
 
-function Invoke-MachineArchive {
+function Invoke-TargetArchive {
     param(
         [Parameter(Mandatory)]
-        [System.IO.DirectoryInfo]$MachineFolder,
+        [object]$TargetConfig,
 
         [Parameter(Mandatory)]
         [object]$Settings,
@@ -44,26 +44,26 @@ function Invoke-MachineArchive {
         [string]$LogFile
     )
 
-    $MachineName = $MachineFolder.Name
-    $MachineRoot = $MachineFolder.FullName
+    $TargetName = Get-ArchiveTargetName -Target $TargetConfig
+    $SourceRoot = [string]$TargetConfig.Path
 
     if (-not $Settings.Enabled) {
-        Write-ArchiveLog "PRESKOČEN [$MachineName]: Enabled je false." -LogFile $LogFile
+        Write-ArchiveLog "PRESKOCEN [$TargetName]: Enabled je false." -LogFile $LogFile
         return New-ArchiveResult -Skipped 1
     }
 
-    $ArchiveRoot = Join-Path $MachineRoot $Settings.ArchiveFolder
+    $ArchiveRoot = Join-Path $SourceRoot $Settings.ArchiveFolder
     $CutoffDate = Get-CutoffDate -OlderThanDays $Settings.OlderThanDays
 
     Write-ArchiveLog "------------------------------------------------------------" -LogFile $LogFile
-    Write-ArchiveLog "MAŠINA: $MachineName" -LogFile $LogFile
-    Write-ArchiveLog "Putanja: $MachineRoot" -LogFile $LogFile
+    Write-ArchiveLog "CILJ: $TargetName" -LogFile $LogFile
+    Write-ArchiveLog "Putanja: $SourceRoot" -LogFile $LogFile
     Write-ArchiveLog "Starost: $($Settings.OlderThanDays) dana" -LogFile $LogFile
     Write-ArchiveLog "Ekstenzije: $($Settings.Extensions -join ', ')" -LogFile $LogFile
     Write-ArchiveLog "TestMode: $($Settings.TestMode)" -LogFile $LogFile
 
     $FileSearchParams = @{
-        MachineRoot = $MachineRoot
+        SourceRoot  = $SourceRoot
         ArchiveRoot = $ArchiveRoot
         CutoffDate  = $CutoffDate
         Extensions  = $Settings.Extensions
@@ -73,20 +73,20 @@ function Invoke-MachineArchive {
 
     $Result = New-ArchiveResult -Found $Files.Count
 
-    Write-ArchiveLog "Pronađeno fajlova: $($Files.Count)" -LogFile $LogFile
+    Write-ArchiveLog "Pronadjeno fajlova: $($Files.Count)" -LogFile $LogFile
 
     foreach ($File in $Files) {
         try {
             $DestinationParams = @{
                 File        = $File
-                MachineRoot = $MachineRoot
+                SourceRoot  = $SourceRoot
                 ArchiveRoot = $ArchiveRoot
             }
 
             $Destination = Get-DestinationPath @DestinationParams
 
             if ($Settings.TestMode) {
-                Write-ArchiveLog "TEST [$MachineName]: '$($File.FullName)' -> '$($Destination.File)'" -LogFile $LogFile
+                Write-ArchiveLog "TEST [$TargetName]: '$($File.FullName)' -> '$($Destination.File)'" -LogFile $LogFile
                 $Result.Tested++
                 continue
             }
@@ -96,12 +96,12 @@ function Invoke-MachineArchive {
             }
 
             Move-Item -LiteralPath $File.FullName -Destination $Destination.File
-            Write-ArchiveLog "PREMJEŠTEN [$MachineName]: '$($File.FullName)' -> '$($Destination.File)'" -LogFile $LogFile
+            Write-ArchiveLog "PREMJESTEN [$TargetName]: '$($File.FullName)' -> '$($Destination.File)'" -LogFile $LogFile
 
             $Result.Moved++
         }
         catch {
-            Write-ArchiveLog "GREŠKA [$MachineName]: '$($File.FullName)' - $($_.Exception.Message)" -LogFile $LogFile
+            Write-ArchiveLog "GRESKA [$TargetName]: '$($File.FullName)' - $($_.Exception.Message)" -LogFile $LogFile
             $Result.Errors++
         }
     }
@@ -123,67 +123,36 @@ function Invoke-ArchiveRun {
 
     $Config = Import-ArchiveConfig -Path $ConfigFile
     $Defaults = Get-DefaultSettings -Config $Config -BuiltInDefaults $BuiltInDefaults
-    $ConfiguredMachines = $null
-
-    if (Test-ConfigProperty $Config "Machines") {
-        $ConfiguredMachines = @($Config.Machines)
-    }
-
-    $MachineFolders = @(
-        Get-ChildItem -LiteralPath $Config.BasePath -Directory -Force
-    )
+    $ArchiveTargets = @(Get-ArchiveTargets -Config $Config)
 
     Write-ArchiveLog "============================================================" -LogFile $LogFile
     Write-ArchiveLog "Pokretanje arhiviranja" -LogFile $LogFile
-    Write-ArchiveLog "BasePath: $($Config.BasePath)" -LogFile $LogFile
-    Write-ArchiveLog "Pronađeno foldera: $($MachineFolders.Count)" -LogFile $LogFile
+    Write-ArchiveLog "Broj ciljnih putanja: $($ArchiveTargets.Count)" -LogFile $LogFile
     Write-ArchiveLog "============================================================" -LogFile $LogFile
 
     $Totals = New-ArchiveResult
 
-    foreach ($MachineFolder in $MachineFolders) {
-        $MachineConfigParams = @{
-            MachineName = $MachineFolder.Name
-            Machines    = $ConfiguredMachines
-        }
-
-        $MachineConfig = Get-MachineConfig @MachineConfigParams
-
-        if (
-            $null -ne $ConfiguredMachines -and
-            $ConfiguredMachines.Count -gt 0 -and
-            $null -eq $MachineConfig
-        ) {
-            Write-ArchiveLog "PRESKOČEN [$($MachineFolder.Name)]: Nije naveden u configu." -LogFile $LogFile
-            $Totals.Skipped++
-            continue
-        }
-
-        $MachineSettingsParams = @{
-            MachineConfig = $MachineConfig
-            Defaults      = $Defaults
-        }
-
-        $Settings = Get-MachineSettings @MachineSettingsParams
+    foreach ($ArchiveTarget in $ArchiveTargets) {
+        $Settings = Get-TargetSettings -TargetConfig $ArchiveTarget -Defaults $Defaults
 
         $ArchiveParams = @{
-            MachineFolder = $MachineFolder
-            Settings      = $Settings
-            LogFile       = $LogFile
+            TargetConfig = $ArchiveTarget
+            Settings     = $Settings
+            LogFile      = $LogFile
         }
 
-        $Result = Invoke-MachineArchive @ArchiveParams
+        $Result = Invoke-TargetArchive @ArchiveParams
 
         Add-ArchiveResult -Target $Totals -Source $Result
     }
 
     Write-ArchiveLog "============================================================" -LogFile $LogFile
-    Write-ArchiveLog "Arhiviranje završeno" -LogFile $LogFile
-    Write-ArchiveLog "Pronađeno: $($Totals.Found)" -LogFile $LogFile
-    Write-ArchiveLog "Premješteno: $($Totals.Moved)" -LogFile $LogFile
+    Write-ArchiveLog "Arhiviranje zavrseno" -LogFile $LogFile
+    Write-ArchiveLog "Pronadjeno: $($Totals.Found)" -LogFile $LogFile
+    Write-ArchiveLog "Premjesteno: $($Totals.Moved)" -LogFile $LogFile
     Write-ArchiveLog "Testirano: $($Totals.Tested)" -LogFile $LogFile
-    Write-ArchiveLog "Preskočeno: $($Totals.Skipped)" -LogFile $LogFile
-    Write-ArchiveLog "Greške: $($Totals.Errors)" -LogFile $LogFile
+    Write-ArchiveLog "Preskoceno: $($Totals.Skipped)" -LogFile $LogFile
+    Write-ArchiveLog "Greske: $($Totals.Errors)" -LogFile $LogFile
     Write-ArchiveLog "============================================================" -LogFile $LogFile
 
     return $Totals

@@ -5,7 +5,7 @@ function Get-CutoffDate {
     )
 
     if ($OlderThanDays -le 0) {
-        throw "Broj dana mora biti veći od 0."
+        throw "Broj dana mora biti veci od 0."
     }
 
     return (Get-Date).AddDays(-$OlderThanDays)
@@ -43,7 +43,7 @@ function Test-IsInsideArchive {
 function Get-ArchivableFiles {
     param(
         [Parameter(Mandatory)]
-        [string]$MachineRoot,
+        [string]$SourceRoot,
 
         [Parameter(Mandatory)]
         [string]$ArchiveRoot,
@@ -56,7 +56,7 @@ function Get-ArchivableFiles {
     )
 
     return @(
-        Get-ChildItem -LiteralPath $MachineRoot -Recurse -File -Force |
+        Get-ChildItem -LiteralPath $SourceRoot -Recurse -File -Force |
             Where-Object {
                 $IsInsideArchive = Test-IsInsideArchive -Path $_.FullName -ArchiveRoot $ArchiveRoot
                 $IsOldEnough = $_.LastWriteTime -lt $CutoffDate
@@ -73,14 +73,14 @@ function Get-DestinationPath {
         [System.IO.FileInfo]$File,
 
         [Parameter(Mandatory)]
-        [string]$MachineRoot,
+        [string]$SourceRoot,
 
         [Parameter(Mandatory)]
         [string]$ArchiveRoot
     )
 
     $Year = $File.LastWriteTime.Year.ToString()
-    $RelativePath = $File.FullName.Substring($MachineRoot.Length).TrimStart("\")
+    $RelativePath = $File.FullName.Substring($SourceRoot.Length).TrimStart("\", "/")
     $RelativeDirectory = Split-Path -Path $RelativePath -Parent
     $DestinationDirectory = Join-Path $ArchiveRoot $Year
 

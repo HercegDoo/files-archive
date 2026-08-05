@@ -47,6 +47,10 @@ function Update-ArchiveSettings {
         $Settings.Extensions = @($Source.Extensions)
     }
 
+    if (Test-ConfigProperty $Source "ArchiveFolder") {
+        $Settings.ArchiveFolder = [string]$Source.ArchiveFolder
+    }
+
     if (Test-ConfigProperty $Source "TestMode") {
         $Settings.TestMode = [bool]$Source.TestMode
     }
@@ -72,10 +76,10 @@ function Get-DefaultSettings {
     return Update-ArchiveSettings -Settings $Settings -Source $Config.Defaults
 }
 
-function Get-MachineSettings {
+function Get-TargetSettings {
     param(
         [AllowNull()]
-        [object]$MachineConfig,
+        [object]$TargetConfig,
 
         [Parameter(Mandatory)]
         [object]$Defaults
@@ -83,13 +87,13 @@ function Get-MachineSettings {
 
     $Settings = New-ArchiveSettings -Source $Defaults -IncludeEnabled
 
-    if ($null -eq $MachineConfig) {
+    if ($null -eq $TargetConfig) {
         return $Settings
     }
 
     $UpdateParams = @{
         Settings       = $Settings
-        Source         = $MachineConfig
+        Source         = $TargetConfig
         IncludeEnabled = $true
     }
 

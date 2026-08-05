@@ -19,7 +19,7 @@ $BuiltInDefaults = [PSCustomObject]@{
 }
 
 # ============================================================
-# Učitavanje pomoćnih funkcija
+# Ucitavanje pomocnih funkcija
 # ============================================================
 
 $RequiredScripts = @(
@@ -34,7 +34,7 @@ foreach ($ScriptName in $RequiredScripts) {
     $ScriptPath = Join-Path $LibRoot $ScriptName
 
     if (-not (Test-Path -LiteralPath $ScriptPath -PathType Leaf)) {
-        throw "Pomoćni fajl ne postoji: $ScriptPath"
+        throw "Pomocni fajl ne postoji: $ScriptPath"
     }
 
     . $ScriptPath
@@ -60,6 +60,6 @@ try {
     exit 0
 }
 catch {
-    Write-ArchiveLog "KRITIČNA GREŠKA: $($_.Exception.Message)" -LogFile $LogFile
+    Write-ArchiveLog "KRITICNA GRESKA: $($_.Exception.Message)" -LogFile $LogFile
     exit 1
 }
