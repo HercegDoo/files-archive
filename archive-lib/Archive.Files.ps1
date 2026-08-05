@@ -1,14 +1,14 @@
 function Get-CutoffDate {
     param(
         [Parameter(Mandatory)]
-        [double]$OlderThanDays
+        [double]$OlderThanSeconds
     )
 
-    if ($OlderThanDays -le 0) {
-        throw "Broj dana mora biti veci od 0."
+    if ($OlderThanSeconds -le 0) {
+        throw "Broj sekundi mora biti veci od 0."
     }
 
-    return (Get-Date).AddDays(-$OlderThanDays)
+    return (Get-Date).AddSeconds(-$OlderThanSeconds)
 }
 
 function Test-ExtensionAllowed {
@@ -23,6 +23,95 @@ function Test-ExtensionAllowed {
     return $Extensions -contains $File.Extension.ToLowerInvariant()
 }
 
+function Get-NormalizedDirectoryPath {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    return [System.IO.Path]::GetFullPath($Path).TrimEnd("\", "/")
+}
+
+function Test-IsSamePath {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Left,
+
+        [Parameter(Mandatory)]
+        [string]$Right
+    )
+
+    $NormalizedLeft = Get-NormalizedDirectoryPath -Path $Left
+    $NormalizedRight = Get-NormalizedDirectoryPath -Path $Right
+
+    return [string]::Equals(
+        $NormalizedLeft,
+        $NormalizedRight,
+        [System.StringComparison]::OrdinalIgnoreCase
+    )
+}
+
+function Test-ArchivePathHasDateTokens {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    return $Path -match "\{(year|month)\}"
+}
+
+function ConvertTo-ArchivePathRegex {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    $NormalizedPath = (Get-NormalizedDirectoryPath -Path $Path) + "\"
+    $NormalizedPath = [regex]::Replace(
+        $NormalizedPath,
+        "\{year\}",
+        "ARCHIVE_YEAR_TOKEN",
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
+    $NormalizedPath = [regex]::Replace(
+        $NormalizedPath,
+        "\{month\}",
+        "ARCHIVE_MONTH_TOKEN",
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
+
+    $EscapedPath = [regex]::Escape($NormalizedPath)
+    $EscapedPath = $EscapedPath.Replace("ARCHIVE_YEAR_TOKEN", "\d{4}")
+    $EscapedPath = $EscapedPath.Replace("ARCHIVE_MONTH_TOKEN", "\d{2}")
+
+    return "^$EscapedPath"
+}
+
+function Expand-ArchivePathTemplate {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [datetime]$Date
+    )
+
+    $ExpandedPath = [regex]::Replace(
+        $Path,
+        "\{year\}",
+        $Date.Year.ToString("0000"),
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
+    $ExpandedPath = [regex]::Replace(
+        $ExpandedPath,
+        "\{month\}",
+        $Date.Month.ToString("00"),
+        [System.Text.RegularExpressions.RegexOptions]::IgnoreCase
+    )
+
+    return Get-NormalizedDirectoryPath -Path $ExpandedPath
+}
+
 function Test-IsInsideArchive {
     param(
         [Parameter(Mandatory)]
@@ -32,12 +121,10 @@ function Test-IsInsideArchive {
         [string]$ArchiveRoot
     )
 
-    $ArchiveRootPrefix = $ArchiveRoot.TrimEnd("\", "/") + "\"
+    $NormalizedPath = [System.IO.Path]::GetFullPath($Path)
+    $ArchiveRootPattern = ConvertTo-ArchivePathRegex -Path $ArchiveRoot
 
-    return $Path.StartsWith(
-        $ArchiveRootPrefix,
-        [System.StringComparison]::OrdinalIgnoreCase
-    )
+    return $NormalizedPath -match $ArchiveRootPattern
 }
 
 function Get-ArchivableFiles {
@@ -55,10 +142,19 @@ function Get-ArchivableFiles {
         [string[]]$Extensions
     )
 
+    if (Test-IsSamePath -Left $SourceRoot -Right $ArchiveRoot) {
+        throw "Arhiva putanja ne smije biti ista kao izvorna putanja: $SourceRoot"
+    }
+
+    $ArchiveRootIsInsideSource = Test-IsInsideArchive -Path $ArchiveRoot -ArchiveRoot $SourceRoot
+
     return @(
         Get-ChildItem -LiteralPath $SourceRoot -Recurse -File -Force |
             Where-Object {
-                $IsInsideArchive = Test-IsInsideArchive -Path $_.FullName -ArchiveRoot $ArchiveRoot
+                $IsInsideArchive = (
+                    $ArchiveRootIsInsideSource -and
+                    (Test-IsInsideArchive -Path $_.FullName -ArchiveRoot $ArchiveRoot)
+                )
                 $IsOldEnough = $_.LastWriteTime -lt $CutoffDate
                 $IsExtensionAllowed = Test-ExtensionAllowed -File $_ -Extensions $Extensions
 
@@ -79,10 +175,17 @@ function Get-DestinationPath {
         [string]$ArchiveRoot
     )
 
-    $Year = $File.LastWriteTime.Year.ToString()
+    $Year = $File.LastWriteTime.Year.ToString("0000")
     $RelativePath = $File.FullName.Substring($SourceRoot.Length).TrimStart("\", "/")
     $RelativeDirectory = Split-Path -Path $RelativePath -Parent
-    $DestinationDirectory = Join-Path $ArchiveRoot $Year
+    $ExpandedArchiveRoot = Expand-ArchivePathTemplate -Path $ArchiveRoot -Date $File.LastWriteTime
+
+    if (Test-ArchivePathHasDateTokens -Path $ArchiveRoot) {
+        $DestinationDirectory = $ExpandedArchiveRoot
+    }
+    else {
+        $DestinationDirectory = Join-Path $ExpandedArchiveRoot $Year
+    }
 
     if (-not [string]::IsNullOrWhiteSpace($RelativeDirectory)) {
         $DestinationDirectory = Join-Path $DestinationDirectory $RelativeDirectory

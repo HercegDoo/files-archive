@@ -12,10 +12,14 @@ $LibRoot = Join-Path $ScriptRoot "archive-lib"
 
 # Vrijednosti koje se koriste kada nisu navedene u config.json
 $BuiltInDefaults = [PSCustomObject]@{
-    OlderThanDays = 365
-    Extensions    = @(".txt")
-    ArchiveFolder = "Arhiva"
-    TestMode      = $false
+    OlderThanSeconds = 31536000
+    OlderThanDays    = $null
+    Extensions       = @(".txt")
+    ArchiveFolder    = "Arhiva"
+    ArchivePath      = $null
+    MaxLogSizeMB     = 10
+    LogRotateCount   = 5
+    TestMode         = $false
 }
 
 # ============================================================

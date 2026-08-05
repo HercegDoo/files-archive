@@ -32,6 +32,22 @@ function Add-ArchiveResult {
     $Target.Errors += $Source.Errors
 }
 
+function Get-ArchiveRoot {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SourceRoot,
+
+        [Parameter(Mandatory)]
+        [object]$Settings
+    )
+
+    if (-not [string]::IsNullOrWhiteSpace([string]$Settings.ArchivePath)) {
+        return Resolve-ArchivePath -Path $Settings.ArchivePath -BaseDirectory $SourceRoot
+    }
+
+    return Resolve-ArchivePath -Path $Settings.ArchiveFolder -BaseDirectory $SourceRoot
+}
+
 function Invoke-TargetArchive {
     param(
         [Parameter(Mandatory)]
@@ -52,13 +68,14 @@ function Invoke-TargetArchive {
         return New-ArchiveResult -Skipped 1
     }
 
-    $ArchiveRoot = Join-Path $SourceRoot $Settings.ArchiveFolder
-    $CutoffDate = Get-CutoffDate -OlderThanDays $Settings.OlderThanDays
+    $ArchiveRoot = Get-ArchiveRoot -SourceRoot $SourceRoot -Settings $Settings
+    $CutoffDate = Get-CutoffDate -OlderThanSeconds $Settings.OlderThanSeconds
 
     Write-ArchiveLog "------------------------------------------------------------" -LogFile $LogFile
     Write-ArchiveLog "CILJ: $TargetName" -LogFile $LogFile
     Write-ArchiveLog "Putanja: $SourceRoot" -LogFile $LogFile
-    Write-ArchiveLog "Starost: $($Settings.OlderThanDays) dana" -LogFile $LogFile
+    Write-ArchiveLog "Arhiva: $ArchiveRoot" -LogFile $LogFile
+    Write-ArchiveLog "Starost: $($Settings.OlderThanSeconds) sekundi" -LogFile $LogFile
     Write-ArchiveLog "Ekstenzije: $($Settings.Extensions -join ', ')" -LogFile $LogFile
     Write-ArchiveLog "TestMode: $($Settings.TestMode)" -LogFile $LogFile
 
@@ -125,9 +142,13 @@ function Invoke-ArchiveRun {
     $Defaults = Get-DefaultSettings -Config $Config -BuiltInDefaults $BuiltInDefaults
     $ArchiveTargets = @(Get-ArchiveTargets -Config $Config)
 
+    Set-ArchiveLogLimit -MaxLogSizeMB $Defaults.MaxLogSizeMB -LogRotateCount $Defaults.LogRotateCount
+
     Write-ArchiveLog "============================================================" -LogFile $LogFile
     Write-ArchiveLog "Pokretanje arhiviranja" -LogFile $LogFile
     Write-ArchiveLog "Broj ciljnih putanja: $($ArchiveTargets.Count)" -LogFile $LogFile
+    Write-ArchiveLog "Limit log fajla: $($Defaults.MaxLogSizeMB) MB" -LogFile $LogFile
+    Write-ArchiveLog "Broj rotiranih logova: $($Defaults.LogRotateCount)" -LogFile $LogFile
     Write-ArchiveLog "============================================================" -LogFile $LogFile
 
     $Totals = New-ArchiveResult

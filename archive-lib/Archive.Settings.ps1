@@ -12,12 +12,18 @@ function New-ArchiveSettings {
         $Properties.Enabled = $true
     }
 
-    $Properties.OlderThanDays = $Source.OlderThanDays
-    $Properties.Extensions = $Source.Extensions
-    $Properties.ArchiveFolder = $Source.ArchiveFolder
-    $Properties.TestMode = $Source.TestMode
+    $Properties.OlderThanSeconds = 31536000
+    $Properties.OlderThanDays = $null
+    $Properties.Extensions = @(".txt")
+    $Properties.ArchiveFolder = "Arhiva"
+    $Properties.ArchivePath = $null
+    $Properties.MaxLogSizeMB = 10
+    $Properties.LogRotateCount = 5
+    $Properties.TestMode = $false
 
-    return [PSCustomObject]$Properties
+    $Settings = [PSCustomObject]$Properties
+
+    return Update-ArchiveSettings -Settings $Settings -Source $Source -IncludeEnabled:$IncludeEnabled
 }
 
 function Update-ArchiveSettings {
@@ -41,6 +47,12 @@ function Update-ArchiveSettings {
 
     if (Test-ConfigProperty $Source "OlderThanDays") {
         $Settings.OlderThanDays = [double]$Source.OlderThanDays
+        $Settings.OlderThanSeconds = $Settings.OlderThanDays * 86400
+    }
+
+    if (Test-ConfigProperty $Source "OlderThanSeconds") {
+        $Settings.OlderThanSeconds = [double]$Source.OlderThanSeconds
+        $Settings.OlderThanDays = $null
     }
 
     if (Test-ConfigProperty $Source "Extensions") {
@@ -49,6 +61,23 @@ function Update-ArchiveSettings {
 
     if (Test-ConfigProperty $Source "ArchiveFolder") {
         $Settings.ArchiveFolder = [string]$Source.ArchiveFolder
+    }
+
+    if (Test-ConfigProperty $Source "ArchivePath") {
+        if ([string]::IsNullOrWhiteSpace([string]$Source.ArchivePath)) {
+            $Settings.ArchivePath = $null
+        }
+        else {
+            $Settings.ArchivePath = [string]$Source.ArchivePath
+        }
+    }
+
+    if (Test-ConfigProperty $Source "MaxLogSizeMB") {
+        $Settings.MaxLogSizeMB = [double]$Source.MaxLogSizeMB
+    }
+
+    if (Test-ConfigProperty $Source "LogRotateCount") {
+        $Settings.LogRotateCount = [int]$Source.LogRotateCount
     }
 
     if (Test-ConfigProperty $Source "TestMode") {
