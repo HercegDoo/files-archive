@@ -11,6 +11,7 @@ The script is configured through `config.json` and supports:
 - archive path templates with `{year}` and `{month}`
 - test mode
 - size-based zipped log rotation
+- scheduled execution through Windows FSRM
 
 ## Project Structure
 
@@ -99,6 +100,42 @@ powershell.exe -ExecutionPolicy Bypass -File "C:\ArhivaTest\Start-FileArchive.ps
 
 The script expects `config.json` to be in the same folder as `Start-FileArchive.ps1`.
 
+## Scheduled Run With FSRM
+
+You can use Windows File Server Resource Manager (FSRM) to run the archive script automatically, for example once per day.
+
+Use this command:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File "C:\ArhivaTest\Start-FileArchive.ps1"
+```
+
+Typical setup:
+
+1. Open **File Server Resource Manager**.
+2. Go to **File Management Tasks**.
+3. Create a new file management task.
+4. Configure the task scope according to your environment. The script itself reads all source folders from `config.json`.
+5. Configure the task action or command to run:
+
+```text
+Program/script:
+powershell.exe
+
+Arguments:
+-ExecutionPolicy Bypass -File "C:\ArhivaTest\Start-FileArchive.ps1"
+
+Start in:
+C:\ArhivaTest
+```
+
+6. Configure the schedule, for example **Daily**.
+7. Run the task first with `TestMode: true` in `config.json`.
+8. Check `C:\ArhivaTest\Logs\FileArchive.log`.
+9. When the output is correct, set `TestMode` to `false`.
+
+The FSRM task account must have read access to source folders and write access to archive folders and the `Logs` folder.
+
 ## Example `config.json`
 
 ```json
@@ -158,7 +195,9 @@ The archive path can contain these tokens:
 Examples:
 
 ```json
-"ArchiveFolder": "Arhiva"
+{
+  "ArchiveFolder": "Arhiva"
+}
 ```
 
 If no date token is used, the script automatically groups by year:
@@ -168,7 +207,9 @@ C:\ArhivaTest\TestFiles\SourceA\Arhiva\2026\file.txt
 ```
 
 ```json
-"ArchiveFolder": "Arhiva\\{year}"
+{
+  "ArchiveFolder": "Arhiva\\{year}"
+}
 ```
 
 ```text
@@ -176,7 +217,9 @@ C:\ArhivaTest\TestFiles\SourceA\Arhiva\2026\file.txt
 ```
 
 ```json
-"ArchiveFolder": "Arhiva\\{year}\\{month}"
+{
+  "ArchiveFolder": "Arhiva\\{year}\\{month}"
+}
 ```
 
 ```text
@@ -184,7 +227,9 @@ C:\ArhivaTest\TestFiles\SourceA\Arhiva\2026\08\file.txt
 ```
 
 ```json
-"ArchiveFolder": "D:\\Archive\\SourceA\\{year}\\{month}"
+{
+  "ArchiveFolder": "D:\\Archive\\SourceA\\{year}\\{month}"
+}
 ```
 
 ```text
