@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $ConfigFile = Join-Path $ScriptRoot "config.json"
-$LogFile = Join-Path $ScriptRoot "Logs\Arhiviranje.log"
+$LogFile = Join-Path $ScriptRoot "Logs\FileArchive.log"
 $LibRoot = Join-Path $ScriptRoot "archive-lib"
 
 # Vrijednosti koje se koriste kada nisu navedene u config.json
