@@ -14,6 +14,7 @@ $LibRoot = Join-Path $ScriptRoot "archive-lib"
 $BuiltInDefaults = [PSCustomObject]@{
     OlderThanSeconds = 31536000
     OlderThanDays    = $null
+    DateField        = "LastWriteTime"
     Extensions       = @(".txt")
     ArchiveFolder    = "Arhiva"
     ArchivePath      = $null

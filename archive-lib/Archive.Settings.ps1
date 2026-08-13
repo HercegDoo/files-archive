@@ -14,6 +14,7 @@ function New-ArchiveSettings {
 
     $Properties.OlderThanSeconds = 31536000
     $Properties.OlderThanDays = $null
+    $Properties.DateField = "LastWriteTime"
     $Properties.Extensions = @(".txt")
     $Properties.ArchiveFolder = "Arhiva"
     $Properties.ArchivePath = $null
@@ -53,6 +54,24 @@ function Update-ArchiveSettings {
     if (Test-ConfigProperty $Source "OlderThanSeconds") {
         $Settings.OlderThanSeconds = [double]$Source.OlderThanSeconds
         $Settings.OlderThanDays = $null
+    }
+
+    if (Test-ConfigProperty $Source "DateField") {
+        $DateField = ([string]$Source.DateField).Trim()
+
+        switch -Regex ($DateField) {
+            "^(LastWriteTime|Modified|ModificationTime)$" {
+                $Settings.DateField = "LastWriteTime"
+                break
+            }
+            "^(CreationTime|Created|CreateTime)$" {
+                $Settings.DateField = "CreationTime"
+                break
+            }
+            default {
+                throw "DateField mora biti 'LastWriteTime' ili 'CreationTime'. Vrijednost: $DateField"
+            }
+        }
     }
 
     if (Test-ConfigProperty $Source "Extensions") {
