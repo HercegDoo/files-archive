@@ -66,7 +66,7 @@ function ConvertTo-ArchivePathRegex {
         [string]$Path
     )
 
-    $NormalizedPath = (Get-NormalizedDirectoryPath -Path $Path) + "\"
+    $NormalizedPath = Get-NormalizedDirectoryPath -Path $Path
     $NormalizedPath = [regex]::Replace(
         $NormalizedPath,
         "\{year\}",
@@ -84,7 +84,7 @@ function ConvertTo-ArchivePathRegex {
     $EscapedPath = $EscapedPath.Replace("ARCHIVE_YEAR_TOKEN", "\d{4}")
     $EscapedPath = $EscapedPath.Replace("ARCHIVE_MONTH_TOKEN", "\d{2}")
 
-    return "^$EscapedPath"
+    return "^$EscapedPath([\\/]|$)"
 }
 
 function Expand-ArchivePathTemplate {

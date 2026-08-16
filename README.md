@@ -263,6 +263,47 @@ FileArchive.log.3.zip
 
 `LogRotateCount` controls how many rotated `.zip` logs are kept. When the count is exceeded, the oldest rotated log is deleted.
 
+## Docker Tests
+
+The repository includes Docker-based fixture tests. They prepare a clean copy of the script, copy test files into it, run the archive process, and compare the resulting `data` folder with the expected folder tree.
+
+Run all tests:
+
+```bash
+tests/run-tests.sh
+```
+
+Test layout:
+
+```text
+tests
+|-- Dockerfile
+|-- run-tests.ps1
+|-- run-tests.sh
+`-- test_data
+    `-- <case-name>
+        |-- input
+        |   |-- config.json
+        |   `-- data
+        |-- expected
+        |   `-- data
+        `-- file-times.json
+```
+
+How it works:
+
+- `input` is copied into a temporary application folder inside the container.
+- `file-times.json` sets deterministic file timestamps before the script runs.
+- `expected/data` is the expected final state after archiving.
+- `tests/test_results/<case-name>` is generated after each run and contains:
+  - `actual/` with the real resulting `data` tree
+  - `actual-tree.txt`
+  - `expected-tree.txt`
+  - `diff.txt`
+  - script logs
+
+To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, and timestamp entries in `file-times.json`.
+
 ## Notes
 
 - Files are moved, not copied.
