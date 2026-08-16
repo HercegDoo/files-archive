@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 
 $ProjectRoot = "/work"
 $CasesRoot = Join-Path $ProjectRoot "tests/test_data"
+$WizardCasesRoot = Join-Path $ProjectRoot "tests/wizard_data"
 $ResultsRoot = Join-Path $ProjectRoot "tests/test_results"
 $ScratchRoot = "/tmp/files-archive-tests"
 
@@ -530,6 +531,71 @@ function Invoke-TestCase {
     return $true
 }
 
+function ConvertTo-CanonicalJson {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json) |
+        ConvertTo-Json -Depth 30 -Compress
+}
+
+function Invoke-WizardTestCase {
+    param(
+        [Parameter(Mandatory)]
+        [System.IO.DirectoryInfo]$Case
+    )
+
+    $CaseName = $Case.Name
+    $CaseResult = Join-Path $ResultsRoot "wizard-$CaseName"
+    $ActualConfig = Join-Path $CaseResult "config.json"
+    $InputFile = Join-Path $Case.FullName "input.txt"
+    $ExpectedConfig = Join-Path $Case.FullName "expected-config.json"
+    $RunOutputPath = Join-Path $CaseResult "run-output.log"
+
+    if (Test-Path -LiteralPath $CaseResult) {
+        Remove-Item -LiteralPath $CaseResult -Recurse -Force
+    }
+
+    New-Item -ItemType Directory -Path $CaseResult -Force | Out-Null
+
+    $RunOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "Start-ConfigWizard.ps1") -ConfigFile $ActualConfig -InputFile $InputFile 2>&1
+    $ExitCode = $LASTEXITCODE
+    Write-Lines -Path $RunOutputPath -Lines @($RunOutput | ForEach-Object { [string]$_ })
+
+    $Diff = @()
+
+    if ($ExitCode -ne 0) {
+        $Diff += "WIZARD_EXIT_CODE $ExitCode"
+    }
+
+    if (-not (Test-Path -LiteralPath $ActualConfig -PathType Leaf)) {
+        $Diff += "WIZARD_CONFIG_MISSING $ActualConfig"
+    }
+    else {
+        $ExpectedJson = ConvertTo-CanonicalJson -Path $ExpectedConfig
+        $ActualJson = ConvertTo-CanonicalJson -Path $ActualConfig
+
+        if ($ExpectedJson -ne $ActualJson) {
+            $Diff += "WIZARD_JSON_MISMATCH"
+            Write-Lines -Path (Join-Path $CaseResult "expected-canonical.json") -Lines @($ExpectedJson)
+            Write-Lines -Path (Join-Path $CaseResult "actual-canonical.json") -Lines @($ActualJson)
+        }
+    }
+
+    Write-Lines -Path (Join-Path $CaseResult "diff.txt") -Lines $Diff
+
+    if ($Diff.Count -gt 0) {
+        Write-Host "FAIL wizard-$CaseName"
+        $Diff | ForEach-Object { Write-Host "  $_" }
+        return $false
+    }
+
+    Write-Host "PASS wizard-$CaseName"
+    return $true
+}
+
 if (Test-Path -LiteralPath $ResultsRoot) {
     Remove-Item -LiteralPath $ResultsRoot -Recurse -Force
 }
@@ -552,6 +618,16 @@ $Failed = 0
 foreach ($Case in $Cases) {
     if (-not (Invoke-TestCase -Case $Case)) {
         $Failed++
+    }
+}
+
+if (Test-Path -LiteralPath $WizardCasesRoot -PathType Container) {
+    $WizardCases = @(Get-ChildItem -LiteralPath $WizardCasesRoot -Directory | Sort-Object Name)
+
+    foreach ($WizardCase in $WizardCases) {
+        if (-not (Invoke-WizardTestCase -Case $WizardCase)) {
+            $Failed++
+        }
     }
 }
 

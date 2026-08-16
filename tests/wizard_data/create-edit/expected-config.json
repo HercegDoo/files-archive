@@ -1,0 +1,36 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 12.0,
+    "LogRotateCount": 3,
+    "OlderThanSeconds": 60.0,
+    "DateField": "CreationTime",
+    "Extensions": [".txt", ".pdf"],
+    "MaxDepth": 3,
+    "MaxFilesPerRun": 100,
+    "ArchiveFolder": "Archive/{year}/{month}",
+    "ArchiveZipEnabled": true,
+    "ArchiveZipAfter": "1 year",
+    "ArchiveZipGroupBy": "month",
+    "RetentionEnabled": true,
+    "RetentionYears": 7.0,
+    "RetentionAction": "move",
+    "SecondaryStorage": "Secondary",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "InvoicesEdited",
+      "Path": "data/InvoicesEdited",
+      "Enabled": true,
+      "ArchiveFolder": "../ArchiveEdited/{year}",
+      "OlderThanSeconds": 120.0,
+      "Extensions": [".txt"],
+      "MaxDepth": 1
+    },
+    {
+      "Name": "DisabledSource",
+      "Path": "data/Disabled",
+      "Enabled": false
+    }
+  ]
+}

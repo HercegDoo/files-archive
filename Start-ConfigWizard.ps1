@@ -1,0 +1,442 @@
+param(
+    [string]$ConfigFile,
+    [string]$InputFile
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = "Stop"
+
+$ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+if ([string]::IsNullOrWhiteSpace($ConfigFile)) {
+    $ConfigFile = Join-Path $ScriptRoot "config.json"
+}
+
+$script:WizardInputLines = @()
+$script:WizardInputIndex = 0
+
+if (-not [string]::IsNullOrWhiteSpace($InputFile)) {
+    if (-not (Test-Path -LiteralPath $InputFile -PathType Leaf)) {
+        throw "Input fajl ne postoji: $InputFile"
+    }
+
+    $script:WizardInputLines = @(Get-Content -LiteralPath $InputFile -Encoding UTF8)
+}
+
+function Read-WizardValue {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Prompt,
+
+        [AllowNull()]
+        [object]$Default = $null
+    )
+
+    $DefaultText = if ($null -eq $Default) { "" } else { [string]$Default }
+    $PromptText = if ([string]::IsNullOrWhiteSpace($DefaultText)) { $Prompt } else { "$Prompt [$DefaultText]" }
+
+    if ($script:WizardInputIndex -lt $script:WizardInputLines.Count) {
+        $Value = [string]$script:WizardInputLines[$script:WizardInputIndex]
+        $script:WizardInputIndex++
+        Write-Host "$PromptText`: $Value"
+
+        if ([string]::IsNullOrWhiteSpace($Value)) {
+            return $Default
+        }
+
+        return $Value
+    }
+
+    $EnteredValue = Read-Host $PromptText
+
+    if ([string]::IsNullOrWhiteSpace($EnteredValue)) {
+        return $Default
+    }
+
+    return $EnteredValue
+}
+
+function ConvertTo-WizardNullableInt {
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) {
+        return $null
+    }
+
+    return [int]$Value
+}
+
+function ConvertTo-WizardNullableDouble {
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) {
+        return $null
+    }
+
+    return [double]$Value
+}
+
+function ConvertTo-WizardBool {
+    param(
+        [AllowNull()]
+        [object]$Value,
+
+        [bool]$Default = $false
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) {
+        return $Default
+    }
+
+    switch -Regex (([string]$Value).Trim().ToLowerInvariant()) {
+        "^(y|yes|da|d|true|1)$" { return $true }
+        "^(n|no|ne|false|0)$" { return $false }
+        default { throw "Neispravna boolean vrijednost: $Value" }
+    }
+}
+
+function ConvertTo-WizardStringArray {
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) {
+        return @()
+    }
+
+    return @(
+        ([string]$Value).Split(",", [System.StringSplitOptions]::RemoveEmptyEntries) |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
+}
+
+function Set-ObjectProperty {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Object,
+
+        [Parameter(Mandatory)]
+        [string]$Name,
+
+        [AllowNull()]
+        [object]$Value
+    )
+
+    if ($Object.PSObject.Properties.Name -contains $Name) {
+        $Object.$Name = $Value
+        return
+    }
+
+    Add-Member -InputObject $Object -MemberType NoteProperty -Name $Name -Value $Value
+}
+
+function New-WizardConfig {
+    return [PSCustomObject]@{
+        Defaults = [PSCustomObject]@{
+            MaxLogSizeMB = 20
+            LogRotateCount = 5
+            OlderThanSeconds = 2592000
+            DateField = "LastWriteTime"
+            Extensions = @(".txt", ".pdf", ".docx", ".bmp")
+            MaxDepth = $null
+            MaxFilesPerRun = $null
+            ArchiveFolder = "Arhiva"
+            ArchiveZipEnabled = $false
+            ArchiveZipAfter = "1 year"
+            ArchiveZipGroupBy = "year"
+            RetentionEnabled = $false
+            RetentionYears = 7
+            RetentionAction = "delete"
+            SecondaryStorage = $null
+            TestMode = $true
+        }
+        Targets = @()
+    }
+}
+
+function Import-WizardConfig {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return New-WizardConfig
+    }
+
+    $Config = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+
+    if (-not ($Config.PSObject.Properties.Name -contains "Defaults")) {
+        Set-ObjectProperty -Object $Config -Name "Defaults" -Value (New-WizardConfig).Defaults
+    }
+
+    if (-not ($Config.PSObject.Properties.Name -contains "Targets")) {
+        Set-ObjectProperty -Object $Config -Name "Targets" -Value @()
+    }
+
+    return $Config
+}
+
+function Save-WizardConfig {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Config,
+
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    $Directory = Split-Path -Parent $Path
+
+    if (-not [string]::IsNullOrWhiteSpace($Directory) -and -not (Test-Path -LiteralPath $Directory -PathType Container)) {
+        New-Item -ItemType Directory -Path $Directory -Force | Out-Null
+    }
+
+    $Config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Path -Encoding UTF8
+    Write-Host "Config sacuvan: $Path"
+}
+
+function Get-Targets {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Config
+    )
+
+    return @($Config.Targets)
+}
+
+function Set-Targets {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Config,
+
+        [Parameter(Mandatory)]
+        [object[]]$Targets
+    )
+
+    $Config.Targets = @($Targets)
+}
+
+function Show-Targets {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Config
+    )
+
+    $Targets = @(Get-Targets -Config $Config)
+
+    if ($Targets.Count -eq 0) {
+        Write-Host "Targets: nema definisanih targeta."
+        return
+    }
+
+    for ($Index = 0; $Index -lt $Targets.Count; $Index++) {
+        $Target = $Targets[$Index]
+        $Enabled = if ($Target.PSObject.Properties.Name -contains "Enabled") { $Target.Enabled } else { $true }
+        Write-Host "$($Index + 1). $($Target.Name) | Enabled=$Enabled | Path=$($Target.Path)"
+    }
+}
+
+function Edit-Defaults {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Config
+    )
+
+    $Defaults = $Config.Defaults
+
+    Set-ObjectProperty -Object $Defaults -Name "MaxLogSizeMB" -Value (ConvertTo-WizardNullableDouble (Read-WizardValue "MaxLogSizeMB" $Defaults.MaxLogSizeMB))
+    Set-ObjectProperty -Object $Defaults -Name "LogRotateCount" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "LogRotateCount" $Defaults.LogRotateCount))
+    Set-ObjectProperty -Object $Defaults -Name "OlderThanSeconds" -Value (ConvertTo-WizardNullableDouble (Read-WizardValue "OlderThanSeconds" $Defaults.OlderThanSeconds))
+    Set-ObjectProperty -Object $Defaults -Name "DateField" -Value ([string](Read-WizardValue "DateField (LastWriteTime/CreationTime)" $Defaults.DateField))
+    Set-ObjectProperty -Object $Defaults -Name "Extensions" -Value (ConvertTo-WizardStringArray (Read-WizardValue "Extensions comma-separated" ($Defaults.Extensions -join ",")))
+    Set-ObjectProperty -Object $Defaults -Name "MaxDepth" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "MaxDepth empty=unlimited" $Defaults.MaxDepth))
+    Set-ObjectProperty -Object $Defaults -Name "MaxFilesPerRun" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "MaxFilesPerRun empty=unlimited" $Defaults.MaxFilesPerRun))
+    Set-ObjectProperty -Object $Defaults -Name "ArchiveFolder" -Value ([string](Read-WizardValue "ArchiveFolder" $Defaults.ArchiveFolder))
+    Set-ObjectProperty -Object $Defaults -Name "TestMode" -Value (ConvertTo-WizardBool (Read-WizardValue "TestMode true/false" $Defaults.TestMode) $Defaults.TestMode)
+
+    Set-ObjectProperty -Object $Defaults -Name "ArchiveZipEnabled" -Value (ConvertTo-WizardBool (Read-WizardValue "ArchiveZipEnabled true/false" $Defaults.ArchiveZipEnabled) $Defaults.ArchiveZipEnabled)
+    Set-ObjectProperty -Object $Defaults -Name "ArchiveZipAfter" -Value ([string](Read-WizardValue "ArchiveZipAfter" $Defaults.ArchiveZipAfter))
+    Set-ObjectProperty -Object $Defaults -Name "ArchiveZipGroupBy" -Value ([string](Read-WizardValue "ArchiveZipGroupBy year/month" $Defaults.ArchiveZipGroupBy))
+
+    Set-ObjectProperty -Object $Defaults -Name "RetentionEnabled" -Value (ConvertTo-WizardBool (Read-WizardValue "RetentionEnabled true/false" $Defaults.RetentionEnabled) $Defaults.RetentionEnabled)
+    Set-ObjectProperty -Object $Defaults -Name "RetentionYears" -Value (ConvertTo-WizardNullableDouble (Read-WizardValue "RetentionYears" $Defaults.RetentionYears))
+    Set-ObjectProperty -Object $Defaults -Name "RetentionAction" -Value ([string](Read-WizardValue "RetentionAction delete/move" $Defaults.RetentionAction))
+    Set-ObjectProperty -Object $Defaults -Name "SecondaryStorage" -Value (Read-WizardValue "SecondaryStorage empty=none" $Defaults.SecondaryStorage)
+}
+
+function Read-TargetValues {
+    param(
+        [AllowNull()]
+        [object]$ExistingTarget = $null
+    )
+
+    $ExistingName = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "Name")) { $ExistingTarget.Name } else { "" }
+    $ExistingPath = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "Path")) { $ExistingTarget.Path } else { "" }
+    $ExistingEnabled = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "Enabled")) { $ExistingTarget.Enabled } else { $true }
+    $ExistingArchiveFolder = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "ArchiveFolder")) { $ExistingTarget.ArchiveFolder } else { "" }
+    $ExistingOlderThanSeconds = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "OlderThanSeconds")) { $ExistingTarget.OlderThanSeconds } else { $null }
+    $ExistingExtensions = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "Extensions")) { @($ExistingTarget.Extensions) -join "," } else { "" }
+    $ExistingMaxDepth = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "MaxDepth")) { $ExistingTarget.MaxDepth } else { $null }
+
+    $Target = [PSCustomObject]@{
+        Name = [string](Read-WizardValue "Target name" $ExistingName)
+        Path = [string](Read-WizardValue "Target path" $ExistingPath)
+        Enabled = ConvertTo-WizardBool (Read-WizardValue "Enabled true/false" $ExistingEnabled) $ExistingEnabled
+    }
+
+    $ArchiveFolder = Read-WizardValue "ArchiveFolder override empty=default" $ExistingArchiveFolder
+    if (-not [string]::IsNullOrWhiteSpace([string]$ArchiveFolder)) {
+        Set-ObjectProperty -Object $Target -Name "ArchiveFolder" -Value ([string]$ArchiveFolder)
+    }
+
+    $OlderThanSeconds = ConvertTo-WizardNullableDouble (Read-WizardValue "OlderThanSeconds override empty=default" $ExistingOlderThanSeconds)
+    if ($null -ne $OlderThanSeconds) {
+        Set-ObjectProperty -Object $Target -Name "OlderThanSeconds" -Value $OlderThanSeconds
+    }
+
+    $Extensions = @(ConvertTo-WizardStringArray (Read-WizardValue "Extensions override comma-separated empty=default" $ExistingExtensions))
+    if ($Extensions.Count -gt 0) {
+        Set-ObjectProperty -Object $Target -Name "Extensions" -Value $Extensions
+    }
+
+    $MaxDepth = ConvertTo-WizardNullableInt (Read-WizardValue "MaxDepth override empty=default" $ExistingMaxDepth)
+    if ($null -ne $MaxDepth) {
+        Set-ObjectProperty -Object $Target -Name "MaxDepth" -Value $MaxDepth
+    }
+
+    return $Target
+}
+
+function Add-Target {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Config
+    )
+
+    $Targets = @(Get-Targets -Config $Config)
+    $Targets += Read-TargetValues
+    Set-Targets -Config $Config -Targets $Targets
+}
+
+function Edit-Target {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Config
+    )
+
+    $Targets = @(Get-Targets -Config $Config)
+    Show-Targets -Config $Config
+
+    if ($Targets.Count -eq 0) {
+        return
+    }
+
+    $Index = [int](Read-WizardValue "Target number to edit" "1") - 1
+
+    if ($Index -lt 0 -or $Index -ge $Targets.Count) {
+        throw "Target broj nije validan."
+    }
+
+    $Targets[$Index] = Read-TargetValues -ExistingTarget $Targets[$Index]
+    Set-Targets -Config $Config -Targets $Targets
+}
+
+function Set-TargetEnabled {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Config
+    )
+
+    $Targets = @(Get-Targets -Config $Config)
+    Show-Targets -Config $Config
+
+    if ($Targets.Count -eq 0) {
+        return
+    }
+
+    $Index = [int](Read-WizardValue "Target number" "1") - 1
+
+    if ($Index -lt 0 -or $Index -ge $Targets.Count) {
+        throw "Target broj nije validan."
+    }
+
+    $Enabled = ConvertTo-WizardBool (Read-WizardValue "Enabled true/false" $Targets[$Index].Enabled) $Targets[$Index].Enabled
+    Set-ObjectProperty -Object $Targets[$Index] -Name "Enabled" -Value $Enabled
+    Set-Targets -Config $Config -Targets $Targets
+}
+
+function Remove-Target {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Config
+    )
+
+    $Targets = @(Get-Targets -Config $Config)
+    Show-Targets -Config $Config
+
+    if ($Targets.Count -eq 0) {
+        return
+    }
+
+    $Index = [int](Read-WizardValue "Target number to remove" "1") - 1
+
+    if ($Index -lt 0 -or $Index -ge $Targets.Count) {
+        throw "Target broj nije validan."
+    }
+
+    $UpdatedTargets = @()
+
+    for ($ItemIndex = 0; $ItemIndex -lt $Targets.Count; $ItemIndex++) {
+        if ($ItemIndex -ne $Index) {
+            $UpdatedTargets += $Targets[$ItemIndex]
+        }
+    }
+
+    Set-Targets -Config $Config -Targets $UpdatedTargets
+}
+
+function Show-WizardMenu {
+    Write-Host ""
+    Write-Host "Config wizard"
+    Write-Host "1) New config"
+    Write-Host "2) Edit defaults"
+    Write-Host "3) Add target"
+    Write-Host "4) Edit target"
+    Write-Host "5) Enable/disable target"
+    Write-Host "6) Remove target"
+    Write-Host "7) List targets"
+    Write-Host "8) Save"
+    Write-Host "0) Exit"
+}
+
+$Config = Import-WizardConfig -Path $ConfigFile
+
+while ($true) {
+    Show-WizardMenu
+    $Choice = [string](Read-WizardValue "Choice" "")
+
+    switch ($Choice) {
+        "1" {
+            $Config = New-WizardConfig
+            Write-Host "Novi config je kreiran u memoriji."
+        }
+        "2" { Edit-Defaults -Config $Config }
+        "3" { Add-Target -Config $Config }
+        "4" { Edit-Target -Config $Config }
+        "5" { Set-TargetEnabled -Config $Config }
+        "6" { Remove-Target -Config $Config }
+        "7" { Show-Targets -Config $Config }
+        "8" { Save-WizardConfig -Config $Config -Path $ConfigFile }
+        "0" { return }
+        default { Write-Host "Nepoznata opcija: $Choice" }
+    }
+}

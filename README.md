@@ -101,6 +101,36 @@ powershell.exe -ExecutionPolicy Bypass -File "C:\ArhivaTest\Start-FileArchive.ps
 
 The script expects `config.json` to be in the same folder as `Start-FileArchive.ps1`.
 
+## Config Wizard
+
+Use the wizard to create or modify `config.json` without editing JSON manually:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File "C:\ArhivaTest\Start-ConfigWizard.ps1"
+```
+
+The wizard supports:
+
+- creating a new config
+- editing default settings
+- adding targets
+- editing targets
+- enabling or disabling targets
+- removing targets
+- saving `config.json`
+
+You can also pass an explicit config path:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File "C:\ArhivaTest\Start-ConfigWizard.ps1" -ConfigFile "C:\ArhivaTest\config.json"
+```
+
+For automated tests or scripted setup, pass an input file with one answer per line:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File "C:\ArhivaTest\Start-ConfigWizard.ps1" -ConfigFile "C:\ArhivaTest\config.json" -InputFile "C:\ArhivaTest\wizard-input.txt"
+```
+
 ## Scheduled Run With FSRM
 
 You can use Windows File Server Resource Manager (FSRM) to run the archive script automatically, for example once per day.
