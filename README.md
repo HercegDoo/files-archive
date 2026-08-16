@@ -101,6 +101,83 @@ powershell.exe -ExecutionPolicy Bypass -File "C:\ArhivaTest\Start-FileArchive.ps
 
 The script expects `config.json` to be in the same folder as `Start-FileArchive.ps1`.
 
+## Portable Single-File Build
+
+You can build one portable PowerShell file that contains the archive runner, config wizard, scheduled-task helper, and `archive-lib` runtime.
+
+Build locally:
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File ".\build\Build-SingleFile.ps1" -Version "1.0.0"
+```
+
+Output:
+
+```text
+dist
+|-- files-archive-1.0.0
+|   |-- FileArchive.Portable.ps1
+|   |-- README.md
+|   `-- README.PORTABLE.txt
+`-- files-archive-1.0.0.zip
+```
+
+Copy only `FileArchive.Portable.ps1` to a server if you want a single-file deployment.
+
+Start the portable menu:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\FileArchive.Portable.ps1"
+```
+
+The menu provides these basic actions:
+
+- run the archive script
+- build or edit `config.json` through the wizard
+- register or update the Windows Scheduled Task
+- extract the normal multi-file runtime
+- show active paths/status
+
+Run archive directly from the portable file, for automation or Task Scheduler:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\FileArchive.Portable.ps1" -Mode Archive
+```
+
+Run the config wizard from the portable file:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\FileArchive.Portable.ps1" -Mode Wizard
+```
+
+Register or update the Windows Scheduled Task from the portable file:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\FileArchive.Portable.ps1" -Mode RegisterTask
+```
+
+Extract the normal multi-file runtime from the portable file:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File ".\FileArchive.Portable.ps1" -Mode Extract -ExtractTo ".\runtime"
+```
+
+The portable script expects `config.json` and `scheduled-task.json` next to `FileArchive.Portable.ps1` unless you pass explicit paths with `-ConfigFile` or `-TaskConfigFile`.
+
+Release builds are automated through GitHub Actions. Publishing a GitHub Release or pushing a `v*` tag builds the portable ZIP and `FileArchive.Portable.ps1`, then attaches both files directly to the GitHub Release assets for one-click download.
+
+Typical release flow:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+After the workflow finishes, open the GitHub Release page and download either:
+
+- `FileArchive.Portable.ps1` for single-file deployment
+- `files-archive-<version>.zip` for the packaged release
+
 ## Config Wizard
 
 Use the wizard to create or modify `config.json` without editing JSON manually:

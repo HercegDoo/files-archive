@@ -1,0 +1,80 @@
+name: Release Build
+
+on:
+  release:
+    types: [published]
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-single-file:
+    name: Build portable single-file package
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: |
+          chmod +x tests/run-tests.sh
+          tests/run-tests.sh
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${GITHUB_REF_NAME:-}" ]; then
+            version="${GITHUB_REF_NAME}"
+          else
+            version="manual-${GITHUB_RUN_NUMBER}"
+          fi
+          version="${version#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Build single-file package
+        shell: pwsh
+        run: |
+          ./build/Build-SingleFile.ps1 -Version "${{ steps.version.outputs.version }}" -OutputDirectory ./dist
+
+      - name: Upload portable package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: files-archive-${{ steps.version.outputs.version }}
+          path: |
+            dist/files-archive-${{ steps.version.outputs.version }}.zip
+            dist/files-archive-${{ steps.version.outputs.version }}/FileArchive.Portable.ps1
+
+      - name: Attach assets to published GitHub Release
+        if: github.event_name == 'release'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh release upload "${{ github.event.release.tag_name }}" \
+            "dist/files-archive-${{ steps.version.outputs.version }}.zip" \
+            "dist/files-archive-${{ steps.version.outputs.version }}/FileArchive.Portable.ps1" \
+            --clobber
+
+      - name: Create or update GitHub Release for tag
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          zip_path="dist/files-archive-${{ steps.version.outputs.version }}.zip"
+          ps1_path="dist/files-archive-${{ steps.version.outputs.version }}/FileArchive.Portable.ps1"
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$zip_path" "$ps1_path" --clobber
+          else
+            gh release create "$tag" "$zip_path" "$ps1_path" \
+              --title "$tag" \
+              --notes "Portable File Archive build. Download FileArchive.Portable.ps1 for single-file deployment or the ZIP package for documentation."
+          fi

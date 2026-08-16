@@ -612,6 +612,152 @@ function Invoke-WizardTestCase {
     return $true
 }
 
+function Invoke-SingleFileBuildTest {
+    $CaseName = "single-file-build"
+    $CaseResult = Join-Path $ResultsRoot $CaseName
+    $BuildOutput = Join-Path $CaseResult "dist"
+    $PackageRoot = Join-Path $BuildOutput "files-archive-test"
+    $PortableScript = Join-Path $PackageRoot "FileArchive.Portable.ps1"
+    $Diff = @()
+
+    if (Test-Path -LiteralPath $CaseResult) {
+        Remove-Item -LiteralPath $CaseResult -Recurse -Force
+    }
+
+    New-Item -ItemType Directory -Path $CaseResult -Force | Out-Null
+
+    $BuildOutputText = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "build/Build-SingleFile.ps1") -Version "test" -OutputDirectory $BuildOutput 2>&1
+    $BuildExitCode = $LASTEXITCODE
+    Write-Lines -Path (Join-Path $CaseResult "build-output.log") -Lines @($BuildOutputText | ForEach-Object { [string]$_ })
+
+    if ($BuildExitCode -ne 0) {
+        $Diff += "BUILD_EXIT_CODE $BuildExitCode"
+    }
+
+    if (-not (Test-Path -LiteralPath $PortableScript -PathType Leaf)) {
+        $Diff += "PORTABLE_SCRIPT_MISSING $PortableScript"
+    }
+
+    if (-not (Test-Path -LiteralPath (Join-Path $BuildOutput "files-archive-test.zip") -PathType Leaf)) {
+        $Diff += "PORTABLE_ZIP_MISSING"
+    }
+
+    if ($Diff.Count -eq 0) {
+        $ExtractDir = Join-Path $CaseResult "extracted"
+        $ExtractOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File $PortableScript -Mode Extract -ExtractTo $ExtractDir 2>&1
+        $ExtractExitCode = $LASTEXITCODE
+        Write-Lines -Path (Join-Path $CaseResult "extract-output.log") -Lines @($ExtractOutput | ForEach-Object { [string]$_ })
+
+        if ($ExtractExitCode -ne 0) {
+            $Diff += "EXTRACT_EXIT_CODE $ExtractExitCode"
+        }
+
+        foreach ($ExpectedFile in @("Start-FileArchive.ps1", "Start-ConfigWizard.ps1", "Register-FileArchiveScheduledTask.ps1", "archive-lib/Archive.Run.ps1")) {
+            if (-not (Test-Path -LiteralPath (Join-Path $ExtractDir $ExpectedFile) -PathType Leaf)) {
+                $Diff += "EXTRACT_FILE_MISSING $ExpectedFile"
+            }
+        }
+    }
+
+    if ($Diff.Count -eq 0) {
+        $ArchiveRunDir = Join-Path $CaseResult "archive-run"
+        New-Item -ItemType Directory -Path (Join-Path $ArchiveRunDir "data/Source") -Force | Out-Null
+
+        @"
+{
+  "Defaults": {
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "PortableSource",
+      "Path": "data/Source",
+      "Enabled": true
+    }
+  ]
+}
+"@ | Set-Content -LiteralPath (Join-Path $ArchiveRunDir "config.json") -Encoding UTF8
+
+        Set-Content -LiteralPath (Join-Path $ArchiveRunDir "data/Source/old.txt") -Value "portable archive test" -Encoding UTF8
+        $OldFile = Get-Item -LiteralPath (Join-Path $ArchiveRunDir "data/Source/old.txt")
+        $OldFile.LastWriteTimeUtc = ([datetime]::Parse("2020-01-01T00:00:00Z")).ToUniversalTime()
+
+        $ArchiveOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File $PortableScript -Mode Archive -ConfigFile (Join-Path $ArchiveRunDir "config.json") 2>&1
+        $ArchiveExitCode = $LASTEXITCODE
+        Write-Lines -Path (Join-Path $CaseResult "portable-archive-output.log") -Lines @($ArchiveOutput | ForEach-Object { [string]$_ })
+
+        if ($ArchiveExitCode -ne 0) {
+            $Diff += "PORTABLE_ARCHIVE_EXIT_CODE $ArchiveExitCode"
+        }
+
+        if (-not (Test-Path -LiteralPath (Join-Path $ArchiveRunDir "data/Source/Archive/2020/old.txt") -PathType Leaf)) {
+            $Diff += "PORTABLE_ARCHIVE_FILE_NOT_MOVED"
+        }
+    }
+
+    if ($Diff.Count -eq 0) {
+        $WizardRunDir = Join-Path $CaseResult "wizard-run"
+        New-Item -ItemType Directory -Path $WizardRunDir -Force | Out-Null
+        $WizardInput = Join-Path $WizardRunDir "input.txt"
+        Write-Lines -Path $WizardInput -Lines @("1", "8", "0")
+
+        $WizardOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File $PortableScript -Mode Wizard -ConfigFile (Join-Path $WizardRunDir "config.json") -InputFile $WizardInput 2>&1
+        $WizardExitCode = $LASTEXITCODE
+        Write-Lines -Path (Join-Path $CaseResult "portable-wizard-output.log") -Lines @($WizardOutput | ForEach-Object { [string]$_ })
+
+        if ($WizardExitCode -ne 0) {
+            $Diff += "PORTABLE_WIZARD_EXIT_CODE $WizardExitCode"
+        }
+
+        if (-not (Test-Path -LiteralPath (Join-Path $WizardRunDir "config.json") -PathType Leaf)) {
+            $Diff += "PORTABLE_WIZARD_CONFIG_MISSING"
+        }
+    }
+
+    if ($Diff.Count -eq 0) {
+        $MenuRunDir = Join-Path $CaseResult "menu-run"
+        New-Item -ItemType Directory -Path $MenuRunDir -Force | Out-Null
+        $MenuInput = Join-Path $MenuRunDir "input.txt"
+        Write-Lines -Path $MenuInput -Lines @("2", "1", "8", "0")
+
+        $MenuOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File $PortableScript -ConfigFile (Join-Path $MenuRunDir "config.json") -InputFile $MenuInput 2>&1
+        $MenuExitCode = $LASTEXITCODE
+        $MenuOutputLines = @($MenuOutput | ForEach-Object { [string]$_ })
+        Write-Lines -Path (Join-Path $CaseResult "portable-menu-output.log") -Lines $MenuOutputLines
+
+        if ($MenuExitCode -ne 0) {
+            $Diff += "PORTABLE_MENU_EXIT_CODE $MenuExitCode"
+        }
+
+        if (-not ($MenuOutputLines -contains "Odaberi akciju:")) {
+            $Diff += "PORTABLE_MENU_NOT_SHOWN"
+        }
+
+        if (-not ($MenuOutputLines -contains "  2) Build/edit config wizard")) {
+            $Diff += "PORTABLE_MENU_WIZARD_OPTION_MISSING"
+        }
+
+        if (-not (Test-Path -LiteralPath (Join-Path $MenuRunDir "config.json") -PathType Leaf)) {
+            $Diff += "PORTABLE_MENU_WIZARD_CONFIG_MISSING"
+        }
+    }
+
+    Write-Lines -Path (Join-Path $CaseResult "diff.txt") -Lines $Diff
+
+    if ($Diff.Count -gt 0) {
+        Write-Host "FAIL $CaseName"
+        $Diff | ForEach-Object { Write-Host "  $_" }
+        return $false
+    }
+
+    Write-Host "PASS $CaseName"
+    return $true
+}
+
 if (Test-Path -LiteralPath $ResultsRoot) {
     Remove-Item -LiteralPath $ResultsRoot -Recurse -Force
 }
@@ -645,6 +791,10 @@ if (Test-Path -LiteralPath $WizardCasesRoot -PathType Container) {
             $Failed++
         }
     }
+}
+
+if (-not (Invoke-SingleFileBuildTest)) {
+    $Failed++
 }
 
 if ($Failed -gt 0) {
