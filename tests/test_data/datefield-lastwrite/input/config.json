@@ -1,0 +1,18 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive/{year}/{month}",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "LastWriteSource",
+      "Path": "data/LastWriteSource",
+      "Enabled": true
+    }
+  ]
+}

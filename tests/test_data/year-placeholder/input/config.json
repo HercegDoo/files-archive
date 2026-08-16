@@ -1,0 +1,18 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive/{year}",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "YearPlaceholder",
+      "Path": "data/SourceA",
+      "Enabled": true
+    }
+  ]
+}

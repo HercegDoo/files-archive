@@ -1,0 +1,8 @@
+[
+  { "Path": "data/RotationSource/file-01.txt", "LastWriteTime": "2020-06-01T10:00:00Z" },
+  { "Path": "data/RotationSource/file-02.txt", "LastWriteTime": "2020-06-01T10:00:00Z" },
+  { "Path": "data/RotationSource/file-03.txt", "LastWriteTime": "2020-06-01T10:00:00Z" },
+  { "Path": "data/RotationSource/file-04.txt", "LastWriteTime": "2020-06-01T10:00:00Z" },
+  { "Path": "data/RotationSource/file-05.txt", "LastWriteTime": "2020-06-01T10:00:00Z" },
+  { "Path": "data/RotationSource/file-06.txt", "LastWriteTime": "2020-06-01T10:00:00Z" }
+]

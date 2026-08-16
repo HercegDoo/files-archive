@@ -78,6 +78,7 @@ function Invoke-TargetArchive {
     Write-ArchiveLog "Starost: $($Settings.OlderThanSeconds) sekundi" -LogFile $LogFile
     Write-ArchiveLog "Datum za arhivu: $($Settings.DateField)" -LogFile $LogFile
     Write-ArchiveLog "Ekstenzije: $($Settings.Extensions -join ', ')" -LogFile $LogFile
+    Write-ArchiveLog "Maksimalna dubina: $(if ($null -eq $Settings.MaxDepth) { 'neograniceno' } else { $Settings.MaxDepth })" -LogFile $LogFile
     Write-ArchiveLog "TestMode: $($Settings.TestMode)" -LogFile $LogFile
 
     $FileSearchParams = @{
@@ -86,6 +87,7 @@ function Invoke-TargetArchive {
         CutoffDate  = $CutoffDate
         DateField   = $Settings.DateField
         Extensions  = $Settings.Extensions
+        MaxDepth    = $Settings.MaxDepth
     }
 
     $Files = @(Get-ArchivableFiles @FileSearchParams)
@@ -124,6 +126,11 @@ function Invoke-TargetArchive {
             Write-ArchiveLog "GRESKA [$TargetName]: '$($File.FullName)' - $($_.Exception.Message)" -LogFile $LogFile
             $Result.Errors++
         }
+    }
+
+    if (-not $Settings.TestMode -and $Result.Moved -gt 0) {
+        $RemovedDirectories = Remove-EmptySourceDirectories -SourceRoot $SourceRoot -ArchiveRoot $ArchiveRoot
+        Write-ArchiveLog "Obrisano praznih foldera: $RemovedDirectories" -LogFile $LogFile
     }
 
     return $Result

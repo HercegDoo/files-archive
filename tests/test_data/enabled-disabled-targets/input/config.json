@@ -1,0 +1,23 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "EnabledSource",
+      "Path": "data/EnabledSource",
+      "Enabled": true
+    },
+    {
+      "Name": "DisabledSource",
+      "Path": "data/DisabledSource",
+      "Enabled": false
+    }
+  ]
+}

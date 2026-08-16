@@ -67,7 +67,7 @@ function Set-TestFileTimes {
     }
 }
 
-function Get-FileManifest {
+function Get-TreeManifest {
     param(
         [Parameter(Mandatory)]
         [string]$Root
@@ -77,15 +77,226 @@ function Get-FileManifest {
         return @()
     }
 
-    return @(
+    $Directories = @(
+        Get-ChildItem -LiteralPath $Root -Recurse -Directory -Force |
+            ForEach-Object {
+                $RelativePath = $_.FullName.Substring($Root.Length).TrimStart("\", "/").Replace("\", "/")
+                "DIR   $RelativePath/"
+            }
+    )
+
+    $Files = @(
         Get-ChildItem -LiteralPath $Root -Recurse -File -Force |
-            Sort-Object FullName |
             ForEach-Object {
                 $RelativePath = $_.FullName.Substring($Root.Length).TrimStart("\", "/").Replace("\", "/")
                 $Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-                "$Hash  $RelativePath"
+                "FILE  $Hash  $RelativePath"
             }
     )
+
+    return @($Directories + $Files | Sort-Object)
+}
+
+function Get-ExpectedExtraDirectoryManifest {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CaseRoot
+    )
+
+    $ExpectedDirectoriesFile = Join-Path $CaseRoot "expected-dirs.txt"
+
+    if (-not (Test-Path -LiteralPath $ExpectedDirectoriesFile -PathType Leaf)) {
+        return @()
+    }
+
+    return @(
+        Get-Content -LiteralPath $ExpectedDirectoriesFile -Encoding UTF8 |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object {
+                $RelativePath = ([string]$_).Trim().Trim("\", "/").Replace("\", "/")
+                "DIR   $RelativePath/"
+            }
+    )
+}
+
+function Get-ExpectedLines {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return @()
+    }
+
+    return @(
+        Get-Content -LiteralPath $Path -Encoding UTF8 |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { ([string]$_).Trim() }
+    )
+}
+
+function Get-ArchiveLogText {
+    param(
+        [Parameter(Mandatory)]
+        [string]$LogsRoot,
+
+        [Parameter(Mandatory)]
+        [string]$ExtractionRoot
+    )
+
+    $LogTextParts = @()
+
+    if (-not (Test-Path -LiteralPath $LogsRoot -PathType Container)) {
+        return ""
+    }
+
+    $ActiveLog = Join-Path $LogsRoot "FileArchive.log"
+
+    if (Test-Path -LiteralPath $ActiveLog -PathType Leaf) {
+        $LogTextParts += Get-Content -LiteralPath $ActiveLog -Raw -Encoding UTF8
+    }
+
+    $RotatedLogs = @(
+        Get-ChildItem -LiteralPath $LogsRoot -Filter "FileArchive.log.*.zip" -File -Force |
+            Sort-Object Name
+    )
+
+    foreach ($RotatedLog in $RotatedLogs) {
+        $RotatedExtractionRoot = Join-Path $ExtractionRoot $RotatedLog.BaseName
+
+        if (Test-Path -LiteralPath $RotatedExtractionRoot) {
+            Remove-Item -LiteralPath $RotatedExtractionRoot -Recurse -Force
+        }
+
+        New-Item -ItemType Directory -Path $RotatedExtractionRoot -Force | Out-Null
+        Expand-Archive -LiteralPath $RotatedLog.FullName -DestinationPath $RotatedExtractionRoot -Force
+
+        $ExtractedFiles = @(Get-ChildItem -LiteralPath $RotatedExtractionRoot -File -Recurse -Force | Sort-Object FullName)
+
+        foreach ($ExtractedFile in $ExtractedFiles) {
+            $LogTextParts += Get-Content -LiteralPath $ExtractedFile.FullName -Raw -Encoding UTF8
+        }
+    }
+
+    return ($LogTextParts -join [Environment]::NewLine)
+}
+
+function Get-NormalizedActiveLogLines {
+    param(
+        [Parameter(Mandatory)]
+        [string]$LogsRoot
+    )
+
+    $ActiveLog = Join-Path $LogsRoot "FileArchive.log"
+
+    if (-not (Test-Path -LiteralPath $ActiveLog -PathType Leaf)) {
+        return @()
+    }
+
+    return @(
+        Get-Content -LiteralPath $ActiveLog -Encoding UTF8 |
+            ForEach-Object {
+                ([string]$_) -replace "^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] ", ""
+            }
+    )
+}
+
+function Get-ExpectedExactLogLines {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CaseRoot,
+
+        [Parameter(Mandatory)]
+        [string]$AppRoot
+    )
+
+    $ExpectedExactLogFile = Join-Path $CaseRoot "expected-log-exact.txt"
+
+    if (-not (Test-Path -LiteralPath $ExpectedExactLogFile -PathType Leaf)) {
+        return $null
+    }
+
+    return @(
+        Get-Content -LiteralPath $ExpectedExactLogFile -Encoding UTF8 |
+            ForEach-Object {
+                ([string]$_).Replace("{APP_ROOT}", $AppRoot)
+            }
+    )
+}
+
+function Compare-ExactLogLines {
+    param(
+        [AllowNull()]
+        [string[]]$ExpectedLines,
+
+        [Parameter(Mandatory)]
+        [string[]]$ActualLines
+    )
+
+    $Failures = @()
+
+    if ($null -eq $ExpectedLines) {
+        return $Failures
+    }
+
+    if ($ExpectedLines.Count -ne $ActualLines.Count) {
+        $Failures += "LOG_EXACT_LINE_COUNT expected=$($ExpectedLines.Count) actual=$($ActualLines.Count)"
+    }
+
+    $MaxCount = [math]::Max($ExpectedLines.Count, $ActualLines.Count)
+
+    for ($Index = 0; $Index -lt $MaxCount; $Index++) {
+        $LineNumber = $Index + 1
+        $ExpectedLine = if ($Index -lt $ExpectedLines.Count) { $ExpectedLines[$Index] } else { "<missing>" }
+        $ActualLine = if ($Index -lt $ActualLines.Count) { $ActualLines[$Index] } else { "<missing>" }
+
+        if ($ExpectedLine -ne $ActualLine) {
+            $Failures += "LOG_EXACT_MISMATCH line=$LineNumber expected='$ExpectedLine' actual='$ActualLine'"
+        }
+    }
+
+    return $Failures
+}
+
+function Test-ExpectedLogAssertions {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CaseRoot,
+
+        [Parameter(Mandatory)]
+        [string]$AppRoot,
+
+        [Parameter(Mandatory)]
+        [string]$CaseResult
+    )
+
+    $Failures = @()
+    $LogsRoot = Join-Path $AppRoot "Logs"
+    $ExpectedLogFiles = Get-ExpectedLines -Path (Join-Path $CaseRoot "expected-log-files.txt")
+    $ExpectedLogContains = Get-ExpectedLines -Path (Join-Path $CaseRoot "expected-log-contains.txt")
+    $ExpectedExactLogLines = Get-ExpectedExactLogLines -CaseRoot $CaseRoot -AppRoot $AppRoot
+    $ActualExactLogLines = @(Get-NormalizedActiveLogLines -LogsRoot $LogsRoot)
+    $ExpandedLogsRoot = Join-Path $CaseResult "expanded-logs"
+    $AllLogText = Get-ArchiveLogText -LogsRoot $LogsRoot -ExtractionRoot $ExpandedLogsRoot
+
+    foreach ($ExpectedLogFile in $ExpectedLogFiles) {
+        $LogFilePath = Join-Path $LogsRoot $ExpectedLogFile
+
+        if (-not (Test-Path -LiteralPath $LogFilePath -PathType Leaf)) {
+            $Failures += "LOG_FILE_MISSING $ExpectedLogFile"
+        }
+    }
+
+    foreach ($ExpectedText in $ExpectedLogContains) {
+        if (-not $AllLogText.Contains($ExpectedText)) {
+            $Failures += "LOG_TEXT_MISSING $ExpectedText"
+        }
+    }
+
+    $Failures += Compare-ExactLogLines -ExpectedLines $ExpectedExactLogLines -ActualLines $ActualExactLogLines
+
+    return $Failures
 }
 
 function Write-Lines {
@@ -144,17 +355,21 @@ function Invoke-TestCase {
     $ExitCode = $LASTEXITCODE
     Write-Lines -Path $RunOutputPath -Lines @($RunOutput | ForEach-Object { [string]$_ })
 
-    $LogFile = Join-Path $AppRoot "Logs/FileArchive.log"
-    if (Test-Path -LiteralPath $LogFile -PathType Leaf) {
-        Copy-Item -LiteralPath $LogFile -Destination (Join-Path $CaseResult "FileArchive.log") -Force
+    $LogsRoot = Join-Path $AppRoot "Logs"
+    if (Test-Path -LiteralPath $LogsRoot -PathType Container) {
+        Copy-Item -LiteralPath $LogsRoot -Destination $CaseResult -Recurse -Force
     }
 
     $ActualData = Join-Path $AppRoot "data"
     $ActualCopy = Join-Path $CaseResult "actual"
     Copy-DirectoryContent -Source $ActualData -Destination $ActualCopy
 
-    $ActualManifest = @(Get-FileManifest -Root $ActualData)
-    $ExpectedManifest = @(Get-FileManifest -Root $CaseExpected)
+    $ActualManifest = @(Get-TreeManifest -Root $ActualData)
+    $ExpectedManifest = @(
+        (Get-TreeManifest -Root $CaseExpected) +
+        (Get-ExpectedExtraDirectoryManifest -CaseRoot $Case.FullName) |
+            Sort-Object -Unique
+    )
     Write-Lines -Path (Join-Path $CaseResult "actual-tree.txt") -Lines $ActualManifest
     Write-Lines -Path (Join-Path $CaseResult "expected-tree.txt") -Lines $ExpectedManifest
 
@@ -167,6 +382,8 @@ function Invoke-TestCase {
     if ($ExitCode -ne 0) {
         $Diff += "SCRIPT_EXIT_CODE $ExitCode"
     }
+
+    $Diff += Test-ExpectedLogAssertions -CaseRoot $Case.FullName -AppRoot $AppRoot -CaseResult $CaseResult
 
     Write-Lines -Path (Join-Path $CaseResult "diff.txt") -Lines $Diff
 
@@ -208,6 +425,10 @@ foreach ($Case in $Cases) {
 if ($Failed -gt 0) {
     Write-Host "$Failed testova je palo. Detalji su u tests/test_results."
     exit 1
+}
+
+if (Test-Path -LiteralPath $ResultsRoot) {
+    Remove-Item -LiteralPath $ResultsRoot -Recurse -Force
 }
 
 Write-Host "Svi testovi su prosli."

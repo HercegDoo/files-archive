@@ -16,6 +16,7 @@ function New-ArchiveSettings {
     $Properties.OlderThanDays = $null
     $Properties.DateField = "LastWriteTime"
     $Properties.Extensions = @(".txt")
+    $Properties.MaxDepth = $null
     $Properties.ArchiveFolder = "Arhiva"
     $Properties.ArchivePath = $null
     $Properties.MaxLogSizeMB = 10
@@ -25,6 +26,28 @@ function New-ArchiveSettings {
     $Settings = [PSCustomObject]$Properties
 
     return Update-ArchiveSettings -Settings $Settings -Source $Source -IncludeEnabled:$IncludeEnabled
+}
+
+function ConvertTo-ArchiveMaxDepth {
+    param(
+        [AllowNull()]
+        [object]$Value,
+
+        [Parameter(Mandatory)]
+        [string]$PropertyName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) {
+        return $null
+    }
+
+    $Depth = [double]$Value
+
+    if ($Depth -lt 0 -or $Depth -ne [math]::Floor($Depth)) {
+        throw "$PropertyName mora biti cijeli broj veci ili jednak 0."
+    }
+
+    return [int]$Depth
 }
 
 function Update-ArchiveSettings {
@@ -76,6 +99,14 @@ function Update-ArchiveSettings {
 
     if (Test-ConfigProperty $Source "Extensions") {
         $Settings.Extensions = @($Source.Extensions)
+    }
+
+    if (Test-ConfigProperty $Source "MaxNestedDepth") {
+        $Settings.MaxDepth = ConvertTo-ArchiveMaxDepth -Value $Source.MaxNestedDepth -PropertyName "MaxNestedDepth"
+    }
+
+    if (Test-ConfigProperty $Source "MaxDepth") {
+        $Settings.MaxDepth = ConvertTo-ArchiveMaxDepth -Value $Source.MaxDepth -PropertyName "MaxDepth"
     }
 
     if (Test-ConfigProperty $Source "ArchiveFolder") {

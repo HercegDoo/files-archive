@@ -1,0 +1,19 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "MaxDepth": 3,
+    "ArchiveFolder": "Archive",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "DepthLimitedSource",
+      "Path": "data/SourceA",
+      "Enabled": true
+    }
+  ]
+}

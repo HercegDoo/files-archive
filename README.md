@@ -147,6 +147,7 @@ The FSRM task account must have read access to source folders and write access t
     "OlderThanSeconds": 2592000,
     "DateField": "LastWriteTime",
     "Extensions": [".txt", ".pdf", ".docx", ".bmp"],
+    "MaxDepth": null,
     "ArchiveFolder": "Arhiva",
     "TestMode": false
   },
@@ -183,6 +184,7 @@ The FSRM task account must have read access to source folders and write access t
 | `OlderThanSeconds` | Archive files older than this many seconds, based on `DateField`. |
 | `DateField` | Date used for age checks and `{year}` / `{month}` archive folders. Supported values: `LastWriteTime` and `CreationTime`. Default: `LastWriteTime`. |
 | `Extensions` | File extensions that are allowed to be archived. |
+| `MaxDepth` | Optional maximum folder depth to scan under the source folder. Default is `null`, which means unlimited. Root files have depth `0`; `Folder1\file.txt` has depth `1`; `Folder1\Folder2\Folder3\file.txt` has depth `3`. |
 | `ArchiveFolder` | Archive folder or archive path. Can include `{year}` and `{month}`. |
 | `ArchivePath` | Optional explicit archive path. If set, it takes priority over `ArchiveFolder`. |
 | `TestMode` | When `true`, logs what would happen without moving files. |
@@ -287,6 +289,10 @@ tests
         |   `-- data
         |-- expected
         |   `-- data
+        |-- expected-dirs.txt
+        |-- expected-log-contains.txt
+        |-- expected-log-exact.txt
+        |-- expected-log-files.txt
         `-- file-times.json
 ```
 
@@ -295,18 +301,23 @@ How it works:
 - `input` is copied into a temporary application folder inside the container.
 - `file-times.json` sets deterministic file timestamps before the script runs.
 - `expected/data` is the expected final state after archiving.
-- `tests/test_results/<case-name>` is generated after each run and contains:
+- `expected-dirs.txt` is optional and lists expected empty directories under `data`, one path per line.
+- `expected-log-contains.txt` is optional and lists text fragments that must appear in the active or rotated logs.
+- `expected-log-exact.txt` is optional and compares the active `FileArchive.log` line-by-line after removing timestamp prefixes. It supports `{APP_ROOT}` for the temporary application path.
+- `expected-log-files.txt` is optional and lists log files that must exist under `Logs`, for example `FileArchive.log.1.zip`.
+- `tests/test_results/<case-name>` is generated during the run and kept only when a test fails. It contains:
   - `actual/` with the real resulting `data` tree
   - `actual-tree.txt`
   - `expected-tree.txt`
   - `diff.txt`
   - script logs
 
-To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, and timestamp entries in `file-times.json`.
+To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, optional expected empty directories in `expected-dirs.txt`, optional log checks in `expected-log-contains.txt` / `expected-log-exact.txt` / `expected-log-files.txt`, and timestamp entries in `file-times.json`.
 
 ## Notes
 
 - Files are moved, not copied.
 - Existing files inside the archive folder are skipped during future archive runs.
+- Empty source subfolders left behind after successful moves are deleted. The source root folder itself is not deleted.
 - If a destination file already exists, the script appends a timestamp to avoid overwriting it.
 - Use `TestMode: true` before running a new configuration in production.
