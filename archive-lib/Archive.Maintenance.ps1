@@ -169,7 +169,8 @@ function Compress-ArchiveGroup {
     }
 
     $DestinationDirectory = Split-Path -Parent $DestinationZip
-    $TempZip = "$DestinationZip.tmp"
+    $DestinationFileName = [System.IO.Path]::GetFileNameWithoutExtension($DestinationZip)
+    $TempZip = Join-Path $DestinationDirectory "$DestinationFileName.$([guid]::NewGuid().ToString("N")).tmp.zip"
 
     try {
         if (-not (Test-Path -LiteralPath $DestinationDirectory -PathType Container)) {

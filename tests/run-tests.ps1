@@ -428,6 +428,7 @@ function Test-ExpectedLogAssertions {
     $LogsRoot = Join-Path $AppRoot "Logs"
     $ExpectedLogFiles = Get-ExpectedLines -Path (Join-Path $CaseRoot "expected-log-files.txt")
     $ExpectedLogContains = Get-ExpectedLines -Path (Join-Path $CaseRoot "expected-log-contains.txt")
+    $ForbiddenLogContains = Get-ExpectedLines -Path (Join-Path $CaseRoot "forbidden-log-contains.txt")
     $ExpectedExactLogLines = Get-ExpectedExactLogLines -CaseRoot $CaseRoot -AppRoot $AppRoot
     $ActualExactLogLines = @(Get-NormalizedActiveLogLines -LogsRoot $LogsRoot)
     $ExpandedLogsRoot = Join-Path $CaseResult "expanded-logs"
@@ -444,6 +445,12 @@ function Test-ExpectedLogAssertions {
     foreach ($ExpectedText in $ExpectedLogContains) {
         if (-not $AllLogText.Contains($ExpectedText)) {
             $Failures += "LOG_TEXT_MISSING $ExpectedText"
+        }
+    }
+
+    foreach ($ForbiddenText in $ForbiddenLogContains) {
+        if ($AllLogText.Contains($ForbiddenText)) {
+            $Failures += "LOG_TEXT_FORBIDDEN $ForbiddenText"
         }
     }
 
