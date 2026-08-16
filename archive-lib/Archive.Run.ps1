@@ -76,6 +76,7 @@ function Invoke-TargetArchive {
     Write-ArchiveLog "Putanja: $SourceRoot" -LogFile $LogFile
     Write-ArchiveLog "Arhiva: $ArchiveRoot" -LogFile $LogFile
     Write-ArchiveLog "Starost: $($Settings.OlderThanSeconds) sekundi" -LogFile $LogFile
+    Write-ArchiveLog "Datum za arhivu: $($Settings.DateField)" -LogFile $LogFile
     Write-ArchiveLog "Ekstenzije: $($Settings.Extensions -join ', ')" -LogFile $LogFile
     Write-ArchiveLog "TestMode: $($Settings.TestMode)" -LogFile $LogFile
 
@@ -83,6 +84,7 @@ function Invoke-TargetArchive {
         SourceRoot  = $SourceRoot
         ArchiveRoot = $ArchiveRoot
         CutoffDate  = $CutoffDate
+        DateField   = $Settings.DateField
         Extensions  = $Settings.Extensions
     }
 
@@ -98,6 +100,7 @@ function Invoke-TargetArchive {
                 File        = $File
                 SourceRoot  = $SourceRoot
                 ArchiveRoot = $ArchiveRoot
+                DateField   = $Settings.DateField
             }
 
             $Destination = Get-DestinationPath @DestinationParams

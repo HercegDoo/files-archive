@@ -8,6 +8,7 @@ The script is configured through `config.json` and supports:
 - per-target overrides
 - file age in seconds
 - extension filtering
+- archive date based on last modification time or creation time
 - archive path templates with `{year}` and `{month}`
 - test mode
 - size-based zipped log rotation
@@ -144,6 +145,7 @@ The FSRM task account must have read access to source folders and write access t
     "MaxLogSizeMB": 20,
     "LogRotateCount": 5,
     "OlderThanSeconds": 2592000,
+    "DateField": "LastWriteTime",
     "Extensions": [".txt", ".pdf", ".docx", ".bmp"],
     "ArchiveFolder": "Arhiva",
     "TestMode": false
@@ -178,19 +180,25 @@ The FSRM task account must have read access to source folders and write access t
 | --- | --- |
 | `MaxLogSizeMB` | Maximum size of the active log file before rotation. |
 | `LogRotateCount` | Number of zipped rotated log files to keep. |
-| `OlderThanSeconds` | Archive files older than this many seconds, based on `LastWriteTime`. |
+| `OlderThanSeconds` | Archive files older than this many seconds, based on `DateField`. |
+| `DateField` | Date used for age checks and `{year}` / `{month}` archive folders. Supported values: `LastWriteTime` and `CreationTime`. Default: `LastWriteTime`. |
 | `Extensions` | File extensions that are allowed to be archived. |
 | `ArchiveFolder` | Archive folder or archive path. Can include `{year}` and `{month}`. |
 | `ArchivePath` | Optional explicit archive path. If set, it takes priority over `ArchiveFolder`. |
 | `TestMode` | When `true`, logs what would happen without moving files. |
 | `Enabled` | Enables or disables one target. |
 
+Recommended `DateField`:
+
+- Use `LastWriteTime` for normal document archives. This means the archive month follows the last time the file content changed.
+- Use `CreationTime` only when the original creation date is reliable in your environment. On Windows, this value can change when files are copied, restored, downloaded, or extracted.
+
 ## Archive Folder Templates
 
-The archive path can contain these tokens:
+The archive path can contain these tokens. Token values are taken from the configured `DateField`, not from the date when the script runs.
 
-- `{year}`: four-digit year from the file `LastWriteTime`, for example `2026`
-- `{month}`: two-digit month from the file `LastWriteTime`, for example `08`
+- `{year}`: four-digit year from the selected file date, for example `2026`
+- `{month}`: two-digit month from the selected file date, for example `08`
 
 Examples:
 

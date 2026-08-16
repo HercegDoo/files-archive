@@ -112,6 +112,28 @@ function Expand-ArchivePathTemplate {
     return Get-NormalizedDirectoryPath -Path $ExpandedPath
 }
 
+function Get-ArchiveDate {
+    param(
+        [Parameter(Mandatory)]
+        [System.IO.FileInfo]$File,
+
+        [Parameter(Mandatory)]
+        [string]$DateField
+    )
+
+    switch ($DateField) {
+        "LastWriteTime" {
+            return $File.LastWriteTime
+        }
+        "CreationTime" {
+            return $File.CreationTime
+        }
+        default {
+            throw "Nepodrzan DateField: $DateField"
+        }
+    }
+}
+
 function Test-IsInsideArchive {
     param(
         [Parameter(Mandatory)]
@@ -139,6 +161,9 @@ function Get-ArchivableFiles {
         [datetime]$CutoffDate,
 
         [Parameter(Mandatory)]
+        [string]$DateField,
+
+        [Parameter(Mandatory)]
         [string[]]$Extensions
     )
 
@@ -155,7 +180,8 @@ function Get-ArchivableFiles {
                     $ArchiveRootIsInsideSource -and
                     (Test-IsInsideArchive -Path $_.FullName -ArchiveRoot $ArchiveRoot)
                 )
-                $IsOldEnough = $_.LastWriteTime -lt $CutoffDate
+                $ArchiveDate = Get-ArchiveDate -File $_ -DateField $DateField
+                $IsOldEnough = $ArchiveDate -lt $CutoffDate
                 $IsExtensionAllowed = Test-ExtensionAllowed -File $_ -Extensions $Extensions
 
                 -not $IsInsideArchive -and $IsOldEnough -and $IsExtensionAllowed
@@ -172,13 +198,17 @@ function Get-DestinationPath {
         [string]$SourceRoot,
 
         [Parameter(Mandatory)]
-        [string]$ArchiveRoot
+        [string]$ArchiveRoot,
+
+        [Parameter(Mandatory)]
+        [string]$DateField
     )
 
-    $Year = $File.LastWriteTime.Year.ToString("0000")
+    $ArchiveDate = Get-ArchiveDate -File $File -DateField $DateField
+    $Year = $ArchiveDate.Year.ToString("0000")
     $RelativePath = $File.FullName.Substring($SourceRoot.Length).TrimStart("\", "/")
     $RelativeDirectory = Split-Path -Path $RelativePath -Parent
-    $ExpandedArchiveRoot = Expand-ArchivePathTemplate -Path $ArchiveRoot -Date $File.LastWriteTime
+    $ExpandedArchiveRoot = Expand-ArchivePathTemplate -Path $ArchiveRoot -Date $ArchiveDate
 
     if (Test-ArchivePathHasDateTokens -Path $ArchiveRoot) {
         $DestinationDirectory = $ExpandedArchiveRoot
