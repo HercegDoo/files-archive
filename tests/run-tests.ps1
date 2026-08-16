@@ -719,6 +719,82 @@ function Invoke-SingleFileBuildTest {
     }
 
     if ($Diff.Count -eq 0) {
+        $MenuArchiveRunDir = Join-Path $CaseResult "menu-archive-run"
+        New-Item -ItemType Directory -Path (Join-Path $MenuArchiveRunDir "data/Source") -Force | Out-Null
+
+        @"
+{
+  "Defaults": {
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "PortableMenuSource",
+      "Path": "data/Source",
+      "Enabled": true
+    }
+  ]
+}
+"@ | Set-Content -LiteralPath (Join-Path $MenuArchiveRunDir "config.json") -Encoding UTF8
+
+        Set-Content -LiteralPath (Join-Path $MenuArchiveRunDir "data/Source/old-menu.txt") -Value "portable menu archive test" -Encoding UTF8
+        $OldMenuFile = Get-Item -LiteralPath (Join-Path $MenuArchiveRunDir "data/Source/old-menu.txt")
+        $OldMenuFile.LastWriteTimeUtc = ([datetime]::Parse("2020-01-01T00:00:00Z")).ToUniversalTime()
+
+        $MenuArchiveInput = Join-Path $MenuArchiveRunDir "input.txt"
+        Write-Lines -Path $MenuArchiveInput -Lines @("1")
+
+        $MenuArchiveOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File $PortableScript -ConfigFile (Join-Path $MenuArchiveRunDir "config.json") -InputFile $MenuArchiveInput 2>&1
+        $MenuArchiveExitCode = $LASTEXITCODE
+        $MenuArchiveOutputLines = @($MenuArchiveOutput | ForEach-Object { [string]$_ })
+        Write-Lines -Path (Join-Path $CaseResult "portable-menu-archive-output.log") -Lines $MenuArchiveOutputLines
+
+        if ($MenuArchiveExitCode -ne 0) {
+            $Diff += "PORTABLE_MENU_ARCHIVE_EXIT_CODE $MenuArchiveExitCode"
+        }
+
+        if (-not ($MenuArchiveOutputLines -contains "Pokrecem archive script:")) {
+            $Diff += "PORTABLE_MENU_ARCHIVE_START_MESSAGE_MISSING"
+        }
+
+        if (-not ($MenuArchiveOutputLines -contains "Archive run zavrseno uspjesno.")) {
+            $Diff += "PORTABLE_MENU_ARCHIVE_SUCCESS_MESSAGE_MISSING"
+        }
+
+        if (-not (Test-Path -LiteralPath (Join-Path $MenuArchiveRunDir "data/Source/Archive/2020/old-menu.txt") -PathType Leaf)) {
+            $Diff += "PORTABLE_MENU_ARCHIVE_FILE_NOT_MOVED"
+        }
+    }
+
+    if ($Diff.Count -eq 0) {
+        $MenuTaskRunDir = Join-Path $CaseResult "menu-task-run"
+        New-Item -ItemType Directory -Path $MenuTaskRunDir -Force | Out-Null
+        $MenuTaskInput = Join-Path $MenuTaskRunDir "input.txt"
+        Write-Lines -Path $MenuTaskInput -Lines @("3")
+
+        $MenuTaskOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File $PortableScript -ConfigFile (Join-Path $MenuTaskRunDir "config.json") -TaskConfigFile (Join-Path $MenuTaskRunDir "missing-scheduled-task.json") -InputFile $MenuTaskInput 2>&1
+        $MenuTaskExitCode = $LASTEXITCODE
+        $MenuTaskOutputLines = @($MenuTaskOutput | ForEach-Object { [string]$_ })
+        Write-Lines -Path (Join-Path $CaseResult "portable-menu-task-output.log") -Lines $MenuTaskOutputLines
+
+        if ($MenuTaskExitCode -eq 0) {
+            $Diff += "PORTABLE_MENU_TASK_EXPECTED_FAILURE_NOT_RETURNED"
+        }
+
+        if (-not ($MenuTaskOutputLines -contains "Pokrecem Windows Task Scheduler registraciju:")) {
+            $Diff += "PORTABLE_MENU_TASK_START_MESSAGE_MISSING"
+        }
+
+        if (-not ($MenuTaskOutputLines -match "Task Scheduler registration nije uspjelo|Task Scheduler registration greska")) {
+            $Diff += "PORTABLE_MENU_TASK_FAILURE_MESSAGE_MISSING"
+        }
+    }
+
+    if ($Diff.Count -eq 0) {
         $MenuRunDir = Join-Path $CaseResult "menu-run"
         New-Item -ItemType Directory -Path $MenuRunDir -Force | Out-Null
         $MenuInput = Join-Path $MenuRunDir "input.txt"

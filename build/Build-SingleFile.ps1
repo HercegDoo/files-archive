@@ -229,7 +229,8 @@ function Invoke-PortableScriptFile {
     `$PowerShellCommand = Get-PortablePowerShellCommand
     `$BaseArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", `$ScriptPath)
     `$AllArguments = `$BaseArguments + `$Arguments
-    & `$PowerShellCommand @AllArguments
+    & `$PowerShellCommand @AllArguments 2>&1 | ForEach-Object { Write-Host ([string]`$_) }
+
     return `$LASTEXITCODE
 }
 
@@ -239,6 +240,12 @@ function Invoke-PortableArchive {
     `$RuntimeRoot = Ensure-PortableRuntime
     `$ArchiveScript = Join-Path `$RuntimeRoot "Start-FileArchive.ps1"
     `$LogFile = Join-Path `$PortableRoot "Logs/FileArchive.log"
+
+    Write-Host "Pokrecem archive script:"
+    Write-Host "  Script: `$ArchiveScript"
+    Write-Host "  Config: `$ConfigFile"
+    Write-Host "  Log:    `$LogFile"
+
     return Invoke-PortableScriptFile -ScriptPath `$ArchiveScript -Arguments @("-ConfigFile", `$ConfigFile, "-LogFile", `$LogFile)
 }
 
@@ -279,9 +286,15 @@ function Invoke-PortableRegisterTask {
     `$RuntimeRoot = Ensure-PortableRuntime
 
     try {
+        `$RegisterScript = Join-Path `$RuntimeRoot "Register-FileArchiveScheduledTask.ps1"
+
+        Write-Host "Pokrecem Windows Task Scheduler registraciju:"
+        Write-Host "  Task config: `$TaskConfigFile"
+        Write-Host "  Helper:      `$RegisterScript"
+
         `$RegisterArgs = @(
             "-ExecutionPolicy", "Bypass",
-            "-File", (Join-Path `$RuntimeRoot "Register-FileArchiveScheduledTask.ps1"),
+            "-File", `$RegisterScript,
             "-TaskConfigFile", `$TaskConfigFile
         )
 
@@ -289,11 +302,61 @@ function Invoke-PortableRegisterTask {
             `$RegisterArgs += "-WhatIf"
         }
 
-        & powershell.exe @RegisterArgs
+        & powershell.exe @RegisterArgs 2>&1 | ForEach-Object { Write-Host ([string]`$_) }
+
         return `$LASTEXITCODE
     }
     finally {
     }
+}
+
+function Complete-PortableMenuAction {
+    param(
+        [Parameter(Mandatory)]
+        [string]`$ActionName,
+
+        [int]`$ExitCode
+    )
+
+    if (`$ExitCode -eq 0) {
+        Write-Host "`$ActionName zavrseno uspjesno."
+    }
+    else {
+        Write-Host "`$ActionName nije uspjelo. ExitCode: `$ExitCode"
+        Write-Host "Provjeri output iznad i log/config putanje prikazane u meniju."
+    }
+
+    if (`$script:PortableInputMode) {
+        return
+    }
+
+    [void](Read-Host "Pritisni Enter za povratak u meni")
+}
+
+function Invoke-PortableMenuAction {
+    param(
+        [Parameter(Mandatory)]
+        [string]`$ActionName,
+
+        [Parameter(Mandatory)]
+        [scriptblock]`$Action
+    )
+
+    try {
+        `$ExitCode = [int](& `$Action)
+    }
+    catch {
+        `$ExitCode = 1
+        Write-Host "`$ActionName greska: `$(`$_.Exception.Message)"
+    }
+
+    Complete-PortableMenuAction -ActionName `$ActionName -ExitCode `$ExitCode
+
+    if (`$script:PortableInputMode) {
+        return `$ExitCode
+    }
+
+    return 0
 }
 
 function Invoke-PortableExtract {
@@ -339,9 +402,9 @@ function Invoke-PortableMenu {
 
         switch (`$Choice.Trim()) {
             "1" {
-                `$ExitCode = Invoke-PortableArchive
+                `$ExitCode = Invoke-PortableMenuAction -ActionName "Archive run" -Action { Invoke-PortableArchive }
 
-                if (`$ExitCode -ne 0 -or `$script:PortableInputMode) {
+                if (`$script:PortableInputMode) {
                     return `$ExitCode
                 }
             }
@@ -357,14 +420,16 @@ function Invoke-PortableMenu {
                     }
                 }
 
-                if (`$ExitCode -ne 0 -or `$script:PortableInputMode) {
+                Complete-PortableMenuAction -ActionName "Config wizard" -ExitCode `$ExitCode
+
+                if (`$script:PortableInputMode) {
                     return `$ExitCode
                 }
             }
             "3" {
-                `$ExitCode = Invoke-PortableRegisterTask
+                `$ExitCode = Invoke-PortableMenuAction -ActionName "Task Scheduler registration" -Action { Invoke-PortableRegisterTask }
 
-                if (`$ExitCode -ne 0 -or `$script:PortableInputMode) {
+                if (`$script:PortableInputMode) {
                     return `$ExitCode
                 }
             }
@@ -372,7 +437,9 @@ function Invoke-PortableMenu {
                 `$Destination = Read-PortableValue -Prompt "Extract destination" -Default (Join-Path `$PortableRoot "files-archive-runtime")
                 `$ExitCode = Invoke-PortableExtract -Destination `$Destination
 
-                if (`$ExitCode -ne 0 -or `$script:PortableInputMode) {
+                Complete-PortableMenuAction -ActionName "Runtime extract" -ExitCode `$ExitCode
+
+                if (`$script:PortableInputMode) {
                     return `$ExitCode
                 }
             }
@@ -382,6 +449,8 @@ function Invoke-PortableMenu {
                 if (`$script:PortableInputMode) {
                     return 0
                 }
+
+                [void](Read-Host "Pritisni Enter za povratak u meni")
             }
             "0" {
                 return 0
