@@ -208,43 +208,38 @@ function Expand-PortableRuntime {
     return `$Destination
 }
 
-function New-PortableRuntimeDirectory {
-    `$RuntimeRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("files-archive-portable-" + [guid]::NewGuid().ToString("N"))
-    return Expand-PortableRuntime -Destination `$RuntimeRoot
+function Get-PortableRuntimeRoot {
+    return Join-Path `$PortableRoot "files-archive-runtime"
+}
+
+function Ensure-PortableRuntime {
+    `$RuntimeRoot = Get-PortableRuntimeRoot
+    Expand-PortableRuntime -Destination `$RuntimeRoot | Out-Null
+    return `$RuntimeRoot
+}
+
+function Invoke-PortableScriptFile {
+    param(
+        [Parameter(Mandatory)]
+        [string]`$ScriptPath,
+
+        [string[]]`$Arguments = @()
+    )
+
+    `$PowerShellCommand = Get-PortablePowerShellCommand
+    `$BaseArguments = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", `$ScriptPath)
+    `$AllArguments = `$BaseArguments + `$Arguments
+    & `$PowerShellCommand @AllArguments
+    return `$LASTEXITCODE
 }
 
 $ArchiveLibrary
 
 function Invoke-PortableArchive {
-    `$BuiltInDefaults = [PSCustomObject]@{
-        OlderThanSeconds = 31536000
-        OlderThanDays    = `$null
-        DateField        = "LastWriteTime"
-        Extensions       = @(".txt")
-        MaxDepth         = `$null
-        MaxFilesPerRun   = `$null
-        ArchiveFolder    = "Arhiva"
-        ArchivePath      = `$null
-        ArchiveZipEnabled = `$false
-        ArchiveZipAfter = `$null
-        ArchiveZipGroupBy = "year"
-        RetentionEnabled = `$false
-        RetentionYears = `$null
-        RetentionAction = "delete"
-        SecondaryStorage = `$null
-        MaxLogSizeMB     = 10
-        LogRotateCount   = 5
-        TestMode         = `$false
-    }
-
+    `$RuntimeRoot = Ensure-PortableRuntime
+    `$ArchiveScript = Join-Path `$RuntimeRoot "Start-FileArchive.ps1"
     `$LogFile = Join-Path `$PortableRoot "Logs/FileArchive.log"
-    `$Totals = Invoke-ArchiveRun -ConfigFile `$ConfigFile -LogFile `$LogFile -BuiltInDefaults `$BuiltInDefaults
-
-    if (`$Totals.Errors -gt 0) {
-        return 1
-    }
-
-    return 0
+    return Invoke-PortableScriptFile -ScriptPath `$ArchiveScript -Arguments @("-ConfigFile", `$ConfigFile, "-LogFile", `$LogFile)
 }
 
 function Invoke-PortableWizard {
@@ -253,42 +248,35 @@ function Invoke-PortableWizard {
         [string]`$WizardInputFile = `$InputFile
     )
 
-    `$RuntimeRoot = New-PortableRuntimeDirectory
+    `$RuntimeRoot = Ensure-PortableRuntime
     `$PreviousRoot = `$env:FILE_ARCHIVE_PORTABLE_ROOT
     `$PreviousScript = `$env:FILE_ARCHIVE_PORTABLE_SCRIPT
 
     try {
         `$env:FILE_ARCHIVE_PORTABLE_ROOT = `$PortableRoot
-        `$env:FILE_ARCHIVE_PORTABLE_SCRIPT = `$PortableScriptPath
+        `$env:FILE_ARCHIVE_PORTABLE_SCRIPT = Join-Path `$RuntimeRoot "Start-FileArchive.ps1"
 
-        `$WizardArgs = @(
-            "-NoProfile",
-            "-ExecutionPolicy", "Bypass",
-            "-File", (Join-Path `$RuntimeRoot "Start-ConfigWizard.ps1"),
-            "-ConfigFile", `$ConfigFile,
-            "-TaskConfigFile", `$TaskConfigFile
-        )
-
-        if (-not [string]::IsNullOrWhiteSpace(`$WizardInputFile)) {
-            `$WizardArgs += @("-InputFile", `$WizardInputFile)
+        `$WizardScript = Join-Path `$RuntimeRoot "Start-ConfigWizard.ps1"
+        `$WizardParams = @{
+            ConfigFile = `$ConfigFile
+            TaskConfigFile = `$TaskConfigFile
         }
 
-        `$PowerShellCommand = Get-PortablePowerShellCommand
-        & `$PowerShellCommand @WizardArgs
-        return `$LASTEXITCODE
+        if (-not [string]::IsNullOrWhiteSpace(`$WizardInputFile)) {
+            `$WizardParams.InputFile = `$WizardInputFile
+        }
+
+        & `$WizardScript @WizardParams
+        return 0
     }
     finally {
         `$env:FILE_ARCHIVE_PORTABLE_ROOT = `$PreviousRoot
         `$env:FILE_ARCHIVE_PORTABLE_SCRIPT = `$PreviousScript
-
-        if (Test-Path -LiteralPath `$RuntimeRoot) {
-            Remove-Item -LiteralPath `$RuntimeRoot -Recurse -Force
-        }
     }
 }
 
 function Invoke-PortableRegisterTask {
-    `$RuntimeRoot = New-PortableRuntimeDirectory
+    `$RuntimeRoot = Ensure-PortableRuntime
 
     try {
         `$RegisterArgs = @(
@@ -305,9 +293,6 @@ function Invoke-PortableRegisterTask {
         return `$LASTEXITCODE
     }
     finally {
-        if (Test-Path -LiteralPath `$RuntimeRoot) {
-            Remove-Item -LiteralPath `$RuntimeRoot -Recurse -Force
-        }
     }
 }
 
@@ -441,6 +426,9 @@ Generated: $GeneratedAt
 
 Main file:
   FileArchive.Portable.ps1
+
+On first use, the portable script unpacks runtime files into:
+  files-archive-runtime
 
 Default interactive menu:
   powershell.exe -ExecutionPolicy Bypass -File .\FileArchive.Portable.ps1
