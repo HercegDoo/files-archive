@@ -1,7 +1,12 @@
 param(
     [string]$ConfigFile,
     [string]$TaskConfigFile,
-    [string]$InputFile
+    [string]$InputFile,
+
+    [ValidateSet("Menu", "TaskScheduler")]
+    [string]$Mode = "Menu",
+
+    [switch]$SkipTaskApplyPrompt
 )
 
 Set-StrictMode -Version Latest
@@ -280,7 +285,9 @@ function Save-WizardTaskConfig {
 function Configure-ScheduledTask {
     param(
         [Parameter(Mandatory)]
-        [string]$Path
+        [string]$Path,
+
+        [switch]$SkipApplyPrompt
     )
 
     $TaskConfig = Import-WizardTaskConfig -Path $Path
@@ -297,6 +304,10 @@ function Configure-ScheduledTask {
     Set-ObjectProperty -Object $TaskConfig -Name "Enabled" -Value (ConvertTo-WizardBool (Read-WizardValue "Task enabled true/false" $TaskConfig.Enabled) $TaskConfig.Enabled)
 
     Save-WizardTaskConfig -TaskConfig $TaskConfig -Path $Path
+
+    if ($SkipApplyPrompt) {
+        return
+    }
 
     $ApplyNow = ConvertTo-WizardBool (Read-WizardValue "Register/update Windows Scheduled Task now true/false" $false) $false
 
@@ -522,6 +533,11 @@ function Show-WizardMenu {
 }
 
 $Config = Import-WizardConfig -Path $ConfigFile
+
+if ($Mode -eq "TaskScheduler") {
+    Configure-ScheduledTask -Path $TaskConfigFile -SkipApplyPrompt:$SkipTaskApplyPrompt
+    return
+}
 
 while ($true) {
     Show-WizardMenu

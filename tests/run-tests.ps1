@@ -774,7 +774,19 @@ function Invoke-SingleFileBuildTest {
         $MenuTaskRunDir = Join-Path $CaseResult "menu-task-run"
         New-Item -ItemType Directory -Path $MenuTaskRunDir -Force | Out-Null
         $MenuTaskInput = Join-Path $MenuTaskRunDir "input.txt"
-        Write-Lines -Path $MenuTaskInput -Lines @("3")
+        Write-Lines -Path $MenuTaskInput -Lines @(
+            "3",
+            "FileArchivePortableTest",
+            "",
+            "",
+            "Daily",
+            "02:00",
+            "1",
+            "Monday",
+            "SYSTEM",
+            "true",
+            "true"
+        )
 
         $MenuTaskOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File $PortableScript -ConfigFile (Join-Path $MenuTaskRunDir "config.json") -TaskConfigFile (Join-Path $MenuTaskRunDir "missing-scheduled-task.json") -InputFile $MenuTaskInput 2>&1
         $MenuTaskExitCode = $LASTEXITCODE
@@ -782,7 +794,15 @@ function Invoke-SingleFileBuildTest {
         Write-Lines -Path (Join-Path $CaseResult "portable-menu-task-output.log") -Lines $MenuTaskOutputLines
 
         if ($MenuTaskExitCode -eq 0) {
-            $Diff += "PORTABLE_MENU_TASK_EXPECTED_FAILURE_NOT_RETURNED"
+            $Diff += "PORTABLE_MENU_TASK_EXPECTED_PLATFORM_FAILURE_NOT_RETURNED"
+        }
+
+        if (-not ($MenuTaskOutputLines -contains "Prvo ce biti kreiran kroz wizard.")) {
+            $Diff += "PORTABLE_MENU_TASK_AUTO_WIZARD_MESSAGE_MISSING"
+        }
+
+        if (-not (Test-Path -LiteralPath (Join-Path $MenuTaskRunDir "missing-scheduled-task.json") -PathType Leaf)) {
+            $Diff += "PORTABLE_MENU_TASK_CONFIG_NOT_CREATED"
         }
 
         if (-not ($MenuTaskOutputLines -contains "Pokrecem Windows Task Scheduler registraciju:")) {

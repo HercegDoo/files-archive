@@ -252,7 +252,12 @@ function Invoke-PortableArchive {
 function Invoke-PortableWizard {
     param(
         [AllowNull()]
-        [string]`$WizardInputFile = `$InputFile
+        [string]`$WizardInputFile = `$InputFile,
+
+        [ValidateSet("Menu", "TaskScheduler")]
+        [string]`$WizardMode = "Menu",
+
+        [switch]`$SkipTaskApplyPrompt
     )
 
     `$RuntimeRoot = Ensure-PortableRuntime
@@ -267,10 +272,15 @@ function Invoke-PortableWizard {
         `$WizardParams = @{
             ConfigFile = `$ConfigFile
             TaskConfigFile = `$TaskConfigFile
+            Mode = `$WizardMode
         }
 
         if (-not [string]::IsNullOrWhiteSpace(`$WizardInputFile)) {
             `$WizardParams.InputFile = `$WizardInputFile
+        }
+
+        if (`$SkipTaskApplyPrompt) {
+            `$WizardParams.SkipTaskApplyPrompt = `$true
         }
 
         & `$WizardScript @WizardParams
@@ -280,6 +290,45 @@ function Invoke-PortableWizard {
         `$env:FILE_ARCHIVE_PORTABLE_ROOT = `$PreviousRoot
         `$env:FILE_ARCHIVE_PORTABLE_SCRIPT = `$PreviousScript
     }
+}
+
+function Invoke-PortableTaskSchedulerConfigWizard {
+    param(
+        [AllowNull()]
+        [string]`$WizardInputFile = `$InputFile
+    )
+
+    Write-Host "Pokrecem Task Scheduler konfiguraciju kroz wizard:"
+    Write-Host "  Task config: `$TaskConfigFile"
+
+    return Invoke-PortableWizard -WizardInputFile `$WizardInputFile -WizardMode "TaskScheduler" -SkipTaskApplyPrompt
+}
+
+function Ensure-PortableTaskConfig {
+    param(
+        [AllowNull()]
+        [string]`$WizardInputFile = `$InputFile
+    )
+
+    if (Test-Path -LiteralPath `$TaskConfigFile -PathType Leaf) {
+        return 0
+    }
+
+    Write-Host "Task config fajl ne postoji: `$TaskConfigFile"
+    Write-Host "Prvo ce biti kreiran kroz wizard."
+
+    `$ExitCode = Invoke-PortableTaskSchedulerConfigWizard -WizardInputFile `$WizardInputFile
+
+    if (`$ExitCode -ne 0) {
+        return `$ExitCode
+    }
+
+    if (-not (Test-Path -LiteralPath `$TaskConfigFile -PathType Leaf)) {
+        Write-Host "Task config nije kreiran: `$TaskConfigFile"
+        return 1
+    }
+
+    return 0
 }
 
 function Invoke-PortableRegisterTask {
@@ -427,7 +476,24 @@ function Invoke-PortableMenu {
                 }
             }
             "3" {
-                `$ExitCode = Invoke-PortableMenuAction -ActionName "Task Scheduler registration" -Action { Invoke-PortableRegisterTask }
+                `$RemainingInputFile = New-PortableRemainingInputFile
+
+                try {
+                    `$ExitCode = Invoke-PortableMenuAction -ActionName "Task Scheduler registration" -Action {
+                        `$ConfigExitCode = Ensure-PortableTaskConfig -WizardInputFile `$RemainingInputFile
+
+                        if (`$ConfigExitCode -ne 0) {
+                            return `$ConfigExitCode
+                        }
+
+                        return Invoke-PortableRegisterTask
+                    }
+                }
+                finally {
+                    if (-not [string]::IsNullOrWhiteSpace(`$RemainingInputFile) -and (Test-Path -LiteralPath `$RemainingInputFile -PathType Leaf)) {
+                        Remove-Item -LiteralPath `$RemainingInputFile -Force
+                    }
+                }
 
                 if (`$script:PortableInputMode) {
                     return `$ExitCode
@@ -501,6 +567,8 @@ On first use, the portable script unpacks runtime files into:
 
 Default interactive menu:
   powershell.exe -ExecutionPolicy Bypass -File .\FileArchive.Portable.ps1
+
+Menu option 3 creates scheduled-task.json first if it does not exist, then tries to register/update the Windows Scheduled Task.
 
 Run archive:
   powershell.exe -ExecutionPolicy Bypass -File .\FileArchive.Portable.ps1 -Mode Archive
