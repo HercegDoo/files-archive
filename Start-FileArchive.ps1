@@ -16,6 +16,7 @@ $BuiltInDefaults = [PSCustomObject]@{
     OlderThanDays    = $null
     DateField        = "LastWriteTime"
     Extensions       = @(".txt")
+    MaxDepth         = $null
     ArchiveFolder    = "Arhiva"
     ArchivePath      = $null
     MaxLogSizeMB     = 10

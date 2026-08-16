@@ -134,6 +134,48 @@ function Get-ArchiveDate {
     }
 }
 
+function Get-FileRelativeDirectoryDepth {
+    param(
+        [Parameter(Mandatory)]
+        [System.IO.FileInfo]$File,
+
+        [Parameter(Mandatory)]
+        [string]$SourceRoot
+    )
+
+    $RelativePath = $File.FullName.Substring($SourceRoot.Length).TrimStart("\", "/")
+    $RelativeDirectory = Split-Path -Path $RelativePath -Parent
+
+    if ([string]::IsNullOrWhiteSpace($RelativeDirectory)) {
+        return 0
+    }
+
+    return @($RelativeDirectory -split "[\\/]+" | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_)
+    }).Count
+}
+
+function Test-FileDepthAllowed {
+    param(
+        [Parameter(Mandatory)]
+        [System.IO.FileInfo]$File,
+
+        [Parameter(Mandatory)]
+        [string]$SourceRoot,
+
+        [AllowNull()]
+        [object]$MaxDepth
+    )
+
+    if ($null -eq $MaxDepth) {
+        return $true
+    }
+
+    $Depth = Get-FileRelativeDirectoryDepth -File $File -SourceRoot $SourceRoot
+
+    return $Depth -le [int]$MaxDepth
+}
+
 function Test-IsInsideArchive {
     param(
         [Parameter(Mandatory)]
@@ -147,6 +189,45 @@ function Test-IsInsideArchive {
     $ArchiveRootPattern = ConvertTo-ArchivePathRegex -Path $ArchiveRoot
 
     return $NormalizedPath -match $ArchiveRootPattern
+}
+
+function Get-SourceFilesInDirectory {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Directory,
+
+        [Parameter(Mandatory)]
+        [int]$CurrentDepth,
+
+        [AllowNull()]
+        [object]$MaxDepth
+    )
+
+    foreach ($File in @(Get-ChildItem -LiteralPath $Directory -File -Force)) {
+        $File
+    }
+
+    if ($null -ne $MaxDepth -and $CurrentDepth -ge [int]$MaxDepth) {
+        return
+    }
+
+    foreach ($ChildDirectory in @(Get-ChildItem -LiteralPath $Directory -Directory -Force)) {
+        Get-SourceFilesInDirectory -Directory $ChildDirectory.FullName -CurrentDepth ($CurrentDepth + 1) -MaxDepth $MaxDepth
+    }
+}
+
+function Get-SourceFiles {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SourceRoot,
+
+        [AllowNull()]
+        [object]$MaxDepth
+    )
+
+    return @(
+        Get-SourceFilesInDirectory -Directory $SourceRoot -CurrentDepth 0 -MaxDepth $MaxDepth
+    )
 }
 
 function Get-ArchivableFiles {
@@ -164,7 +245,10 @@ function Get-ArchivableFiles {
         [string]$DateField,
 
         [Parameter(Mandatory)]
-        [string[]]$Extensions
+        [string[]]$Extensions,
+
+        [AllowNull()]
+        [object]$MaxDepth = $null
     )
 
     if (Test-IsSamePath -Left $SourceRoot -Right $ArchiveRoot) {
@@ -174,7 +258,7 @@ function Get-ArchivableFiles {
     $ArchiveRootIsInsideSource = Test-IsInsideArchive -Path $ArchiveRoot -ArchiveRoot $SourceRoot
 
     return @(
-        Get-ChildItem -LiteralPath $SourceRoot -Recurse -File -Force |
+        Get-SourceFiles -SourceRoot $SourceRoot -MaxDepth $MaxDepth |
             Where-Object {
                 $IsInsideArchive = (
                     $ArchiveRootIsInsideSource -and
@@ -183,10 +267,43 @@ function Get-ArchivableFiles {
                 $ArchiveDate = Get-ArchiveDate -File $_ -DateField $DateField
                 $IsOldEnough = $ArchiveDate -lt $CutoffDate
                 $IsExtensionAllowed = Test-ExtensionAllowed -File $_ -Extensions $Extensions
+                $IsDepthAllowed = Test-FileDepthAllowed -File $_ -SourceRoot $SourceRoot -MaxDepth $MaxDepth
 
-                -not $IsInsideArchive -and $IsOldEnough -and $IsExtensionAllowed
+                -not $IsInsideArchive -and $IsOldEnough -and $IsExtensionAllowed -and $IsDepthAllowed
             }
     )
+}
+
+function Remove-EmptySourceDirectories {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SourceRoot,
+
+        [Parameter(Mandatory)]
+        [string]$ArchiveRoot
+    )
+
+    $Removed = 0
+
+    $Directories = @(
+        Get-ChildItem -LiteralPath $SourceRoot -Directory -Recurse -Force |
+            Sort-Object @{ Expression = { $_.FullName.Length }; Descending = $true }
+    )
+
+    foreach ($Directory in $Directories) {
+        if (Test-IsInsideArchive -Path $Directory.FullName -ArchiveRoot $ArchiveRoot) {
+            continue
+        }
+
+        if (@(Get-ChildItem -LiteralPath $Directory.FullName -Force).Count -gt 0) {
+            continue
+        }
+
+        Remove-Item -LiteralPath $Directory.FullName -Force
+        $Removed++
+    }
+
+    return $Removed
 }
 
 function Get-DestinationPath {

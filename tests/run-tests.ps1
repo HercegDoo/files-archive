@@ -67,7 +67,7 @@ function Set-TestFileTimes {
     }
 }
 
-function Get-FileManifest {
+function Get-TreeManifest {
     param(
         [Parameter(Mandatory)]
         [string]$Root
@@ -77,13 +77,44 @@ function Get-FileManifest {
         return @()
     }
 
-    return @(
+    $Directories = @(
+        Get-ChildItem -LiteralPath $Root -Recurse -Directory -Force |
+            ForEach-Object {
+                $RelativePath = $_.FullName.Substring($Root.Length).TrimStart("\", "/").Replace("\", "/")
+                "DIR   $RelativePath/"
+            }
+    )
+
+    $Files = @(
         Get-ChildItem -LiteralPath $Root -Recurse -File -Force |
-            Sort-Object FullName |
             ForEach-Object {
                 $RelativePath = $_.FullName.Substring($Root.Length).TrimStart("\", "/").Replace("\", "/")
                 $Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-                "$Hash  $RelativePath"
+                "FILE  $Hash  $RelativePath"
+            }
+    )
+
+    return @($Directories + $Files | Sort-Object)
+}
+
+function Get-ExpectedExtraDirectoryManifest {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CaseRoot
+    )
+
+    $ExpectedDirectoriesFile = Join-Path $CaseRoot "expected-dirs.txt"
+
+    if (-not (Test-Path -LiteralPath $ExpectedDirectoriesFile -PathType Leaf)) {
+        return @()
+    }
+
+    return @(
+        Get-Content -LiteralPath $ExpectedDirectoriesFile -Encoding UTF8 |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object {
+                $RelativePath = ([string]$_).Trim().Trim("\", "/").Replace("\", "/")
+                "DIR   $RelativePath/"
             }
     )
 }
@@ -153,8 +184,12 @@ function Invoke-TestCase {
     $ActualCopy = Join-Path $CaseResult "actual"
     Copy-DirectoryContent -Source $ActualData -Destination $ActualCopy
 
-    $ActualManifest = @(Get-FileManifest -Root $ActualData)
-    $ExpectedManifest = @(Get-FileManifest -Root $CaseExpected)
+    $ActualManifest = @(Get-TreeManifest -Root $ActualData)
+    $ExpectedManifest = @(
+        (Get-TreeManifest -Root $CaseExpected) +
+        (Get-ExpectedExtraDirectoryManifest -CaseRoot $Case.FullName) |
+            Sort-Object -Unique
+    )
     Write-Lines -Path (Join-Path $CaseResult "actual-tree.txt") -Lines $ActualManifest
     Write-Lines -Path (Join-Path $CaseResult "expected-tree.txt") -Lines $ExpectedManifest
 

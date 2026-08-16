@@ -1,0 +1,5 @@
+[
+  { "Path": "data/SourceA/one/two/three/move-depth-3.txt", "LastWriteTime": "2020-01-05T10:00:00Z" },
+  { "Path": "data/SourceA/one/two/three/four/keep-depth-4.txt", "LastWriteTime": "2020-01-05T10:00:00Z" },
+  { "Path": "data/SourceA/cleanup/a/b/remove-me.txt", "LastWriteTime": "2020-01-05T10:00:00Z" }
+]
