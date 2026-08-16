@@ -1,0 +1,2 @@
+Brisanje praznih foldera: False
+Brisanje praznih foldera iskljuceno [CleanupDisabledSource].

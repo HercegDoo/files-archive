@@ -1,0 +1,1 @@
+negated protected pattern should allow cleanup

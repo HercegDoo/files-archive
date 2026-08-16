@@ -307,6 +307,8 @@ The FSRM task account must have read access to source folders and write access t
     "Extensions": [".txt", ".pdf", ".docx", ".bmp"],
     "MaxDepth": null,
     "MaxFilesPerRun": 10000,
+    "DeleteEmptyFolders": true,
+    "ProtectedEmptyFolders": [],
     "ArchiveFolder": "Arhiva",
     "ArchiveZipEnabled": false,
     "ArchiveZipAfter": "1 year",
@@ -324,6 +326,12 @@ The FSRM task account must have read access to source folders and write access t
       "ArchiveFolder": "C:\\ArhivaTest\\TestFiles\\SourceA\\{year}\\Example\\{month}",
       "OlderThanSeconds": 30,
       "Extensions": [".txt"],
+      "DeleteEmptyFolders": true,
+      "ProtectedEmptyFolders": [
+        "templates/**",
+        "keep-empty",
+        "!templates/tmp"
+      ],
       "Enabled": true
     },
     {
@@ -352,6 +360,8 @@ The FSRM task account must have read access to source folders and write access t
 | `Extensions` | File extensions that are allowed to be archived. |
 | `MaxDepth` | Optional maximum folder depth to scan under the source folder. Default is `null`, which means unlimited. Root files have depth `0`; `Folder1\file.txt` has depth `1`; `Folder1\Folder2\Folder3\file.txt` has depth `3`. |
 | `MaxFilesPerRun` | Optional maximum number of eligible files to process in one run. Default is `null`, which means unlimited. The alias `max_files_per_run` is also supported. Files are sorted by `CreationTime` ascending before the limit is applied, so the oldest files are processed first. |
+| `DeleteEmptyFolders` | Controls whether empty source subfolders are deleted after successful moves. Default: `true`. Aliases: `CleanupEmptyFolders`, `delete_empty_folders`. |
+| `ProtectedEmptyFolders` | List of source folder patterns that must not be deleted even when empty. Patterns are relative to the target `Path` and support `.gitignore`-style `*`, `?`, `**`, and negation with `!`. Alias: `protected_empty_folders`. |
 | `ArchiveFolder` | Archive folder or archive path. Can include `{year}` and `{month}`. |
 | `ArchivePath` | Optional explicit archive path. If set, it takes priority over `ArchiveFolder`. |
 | `ArchiveZipEnabled` | Enables automatic ZIP compression of old archive folders. Default: `false`. Alias: `archive_zip_enabled`. |
@@ -368,6 +378,13 @@ Recommended `DateField`:
 
 - Use `LastWriteTime` for normal document archives. This means the archive month follows the last time the file content changed.
 - Use `CreationTime` only when the original creation date is reliable in your environment. On Windows, this value can change when files are copied, restored, downloaded, or extracted.
+
+Protected empty folders:
+
+- `ProtectedEmptyFolders` is evaluated per target, relative to that target's `Path`.
+- Later patterns override earlier patterns, so `!templates/tmp` can unprotect a folder previously matched by `templates/**`.
+- Protected empty source folders are kept during cleanup.
+- Protected empty folders are also mirrored into the archive even when they contain no files. For empty folders there is no file date; if `ArchiveFolder` contains `{year}` or `{month}`, the current run date is used for those placeholders. If `ArchiveFolder` has no date placeholder, the empty folder is created directly under that archive folder.
 
 ## Max Files Per Run
 
@@ -633,12 +650,12 @@ How it works:
   - `diff.txt`
   - script logs
 
-To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, optional expected empty directories in `expected-dirs.txt`, optional expected exit code in `expected-exit-code.txt`, optional log checks in `expected-log-contains.txt` / `expected-log-exact.txt` / `expected-log-files.txt`, optional ZIP checks in `expected-zips.txt` / `expected-zip-entries.txt`, and timestamp entries in `file-times.json`.
+To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, optional input empty directories in `input-dirs.txt`, optional expected empty directories in `expected-dirs.txt`, optional expected exit code in `expected-exit-code.txt`, optional log checks in `expected-log-contains.txt` / `expected-log-exact.txt` / `expected-log-files.txt`, optional ZIP checks in `expected-zips.txt` / `expected-zip-entries.txt`, and timestamp entries in `file-times.json`.
 
 ## Notes
 
 - Files are moved, not copied.
 - Existing files inside the archive folder are skipped during future archive runs.
-- Empty source subfolders left behind after successful moves are deleted. The source root folder itself is not deleted.
+- Empty source subfolders left behind after successful moves are deleted by default. The source root folder itself is not deleted. Use `DeleteEmptyFolders: false` to disable cleanup or `ProtectedEmptyFolders` to keep selected empty folders.
 - If a destination file already exists, the script appends a timestamp to avoid overwriting it.
 - Use `TestMode: true` before running a new configuration in production.

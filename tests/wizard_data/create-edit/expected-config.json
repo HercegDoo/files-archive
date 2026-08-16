@@ -7,6 +7,8 @@
     "Extensions": [".txt", ".pdf"],
     "MaxDepth": 3,
     "MaxFilesPerRun": 100,
+    "DeleteEmptyFolders": true,
+    "ProtectedEmptyFolders": ["templates/**", "!templates/tmp"],
     "ArchiveFolder": "Archive/{year}/{month}",
     "ArchiveZipEnabled": true,
     "ArchiveZipAfter": "1 year",
@@ -25,7 +27,9 @@
       "ArchiveFolder": "../ArchiveEdited/{year}",
       "OlderThanSeconds": 120.0,
       "Extensions": [".txt"],
-      "MaxDepth": 1
+      "MaxDepth": 1,
+      "DeleteEmptyFolders": true,
+      "ProtectedEmptyFolders": ["keep-edited"]
     },
     {
       "Name": "DisabledSource",

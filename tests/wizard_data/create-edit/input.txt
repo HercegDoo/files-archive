@@ -7,6 +7,8 @@ CreationTime
 .txt,.pdf
 3
 100
+true
+templates/**,!templates/tmp
 Archive/{year}/{month}
 false
 true
@@ -24,10 +26,14 @@ true
 30
 .pdf,.docx
 2
+true
+keep
 3
 DisabledSource
 data/Disabled
 true
+
+
 
 
 
@@ -41,6 +47,8 @@ true
 120
 .txt
 1
+true
+keep-edited
 5
 2
 false

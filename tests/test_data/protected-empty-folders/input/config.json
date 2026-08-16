@@ -1,0 +1,25 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive",
+    "DeleteEmptyFolders": true,
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "ProtectedSource",
+      "Path": "data/Source",
+      "Enabled": true,
+      "ProtectedEmptyFolders": [
+        "keep/**",
+        "keep",
+        "cache/**",
+        "!cache/tmp"
+      ]
+    }
+  ]
+}
