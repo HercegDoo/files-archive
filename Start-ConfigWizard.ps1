@@ -161,6 +161,7 @@ function New-WizardConfig {
             OlderThanSeconds = 2592000
             DateField = "LastWriteTime"
             Extensions = @(".txt", ".pdf", ".docx", ".bmp")
+            FileAction = "archive"
             MaxDepth = $null
             MaxFilesPerRun = $null
             DeleteEmptyFolders = $true
@@ -369,12 +370,14 @@ function Edit-Defaults {
     $Defaults = $Config.Defaults
     $DefaultDeleteEmptyFolders = if ($Defaults.PSObject.Properties.Name -contains "DeleteEmptyFolders") { $Defaults.DeleteEmptyFolders } else { $true }
     $DefaultProtectedEmptyFolders = if ($Defaults.PSObject.Properties.Name -contains "ProtectedEmptyFolders") { @($Defaults.ProtectedEmptyFolders) } else { @() }
+    $DefaultFileAction = if ($Defaults.PSObject.Properties.Name -contains "FileAction") { $Defaults.FileAction } else { "archive" }
 
     Set-ObjectProperty -Object $Defaults -Name "MaxLogSizeMB" -Value (ConvertTo-WizardNullableDouble (Read-WizardValue "MaxLogSizeMB" $Defaults.MaxLogSizeMB))
     Set-ObjectProperty -Object $Defaults -Name "LogRotateCount" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "LogRotateCount" $Defaults.LogRotateCount))
     Set-ObjectProperty -Object $Defaults -Name "OlderThanSeconds" -Value (ConvertTo-WizardNullableDouble (Read-WizardValue "OlderThanSeconds" $Defaults.OlderThanSeconds))
     Set-ObjectProperty -Object $Defaults -Name "DateField" -Value ([string](Read-WizardValue "DateField (LastWriteTime/CreationTime)" $Defaults.DateField))
     Set-ObjectProperty -Object $Defaults -Name "Extensions" -Value (ConvertTo-WizardStringArray (Read-WizardValue "Extensions comma-separated" ($Defaults.Extensions -join ",")))
+    Set-ObjectProperty -Object $Defaults -Name "FileAction" -Value ([string](Read-WizardValue "FileAction archive/delete" $DefaultFileAction))
     Set-ObjectProperty -Object $Defaults -Name "MaxDepth" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "MaxDepth empty=unlimited" $Defaults.MaxDepth))
     Set-ObjectProperty -Object $Defaults -Name "MaxFilesPerRun" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "MaxFilesPerRun empty=unlimited" $Defaults.MaxFilesPerRun))
     Set-ObjectProperty -Object $Defaults -Name "DeleteEmptyFolders" -Value (ConvertTo-WizardBool (Read-WizardValue "DeleteEmptyFolders true/false" $DefaultDeleteEmptyFolders) $DefaultDeleteEmptyFolders)
@@ -404,6 +407,7 @@ function Read-TargetValues {
     $ExistingArchiveFolder = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "ArchiveFolder")) { $ExistingTarget.ArchiveFolder } else { "" }
     $ExistingOlderThanSeconds = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "OlderThanSeconds")) { $ExistingTarget.OlderThanSeconds } else { $null }
     $ExistingExtensions = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "Extensions")) { @($ExistingTarget.Extensions) -join "," } else { "" }
+    $ExistingFileAction = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "FileAction")) { $ExistingTarget.FileAction } else { "" }
     $ExistingMaxDepth = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "MaxDepth")) { $ExistingTarget.MaxDepth } else { $null }
     $ExistingDeleteEmptyFolders = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "DeleteEmptyFolders")) { $ExistingTarget.DeleteEmptyFolders } else { $null }
     $ExistingProtectedEmptyFolders = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "ProtectedEmptyFolders")) { @($ExistingTarget.ProtectedEmptyFolders) -join "," } else { "" }
@@ -427,6 +431,11 @@ function Read-TargetValues {
     $Extensions = @(ConvertTo-WizardStringArray (Read-WizardValue "Extensions override comma-separated empty=default" $ExistingExtensions))
     if ($Extensions.Count -gt 0) {
         Set-ObjectProperty -Object $Target -Name "Extensions" -Value $Extensions
+    }
+
+    $FileAction = Read-WizardValue "FileAction override archive/delete empty=default" $ExistingFileAction
+    if (-not [string]::IsNullOrWhiteSpace([string]$FileAction)) {
+        Set-ObjectProperty -Object $Target -Name "FileAction" -Value ([string]$FileAction)
     }
 
     $MaxDepth = ConvertTo-WizardNullableInt (Read-WizardValue "MaxDepth override empty=default" $ExistingMaxDepth)

@@ -1,0 +1,20 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "FileAction": "delete",
+    "MaxDepth": 2,
+    "DeleteEmptyFolders": true,
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "DeleteOldFiles",
+      "Path": "data/Source",
+      "Enabled": true
+    }
+  ]
+}

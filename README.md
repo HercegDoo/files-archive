@@ -305,6 +305,7 @@ The FSRM task account must have read access to source folders and write access t
     "OlderThanSeconds": 2592000,
     "DateField": "LastWriteTime",
     "Extensions": [".txt", ".pdf", ".docx", ".bmp"],
+    "FileAction": "archive",
     "MaxDepth": null,
     "MaxFilesPerRun": 10000,
     "DeleteEmptyFolders": true,
@@ -326,6 +327,7 @@ The FSRM task account must have read access to source folders and write access t
       "ArchiveFolder": "C:\\ArhivaTest\\TestFiles\\SourceA\\{year}\\Example\\{month}",
       "OlderThanSeconds": 30,
       "Extensions": [".txt"],
+      "FileAction": "archive",
       "DeleteEmptyFolders": true,
       "ProtectedEmptyFolders": [
         "templates/**",
@@ -358,6 +360,7 @@ The FSRM task account must have read access to source folders and write access t
 | `OlderThanSeconds` | Archive files older than this many seconds, based on `DateField`. |
 | `DateField` | Date used for age checks and `{year}` / `{month}` archive folders. Supported values: `LastWriteTime` and `CreationTime`. Default: `LastWriteTime`. |
 | `Extensions` | File extensions that are allowed to be archived. |
+| `FileAction` | What to do with eligible files: `archive` moves files into the archive; `delete` permanently deletes them. Default: `archive`. Aliases: `Action`, `action`; `DeleteOnly: true` is also supported. |
 | `MaxDepth` | Optional maximum folder depth to scan under the source folder. Default is `null`, which means unlimited. Root files have depth `0`; `Folder1\file.txt` has depth `1`; `Folder1\Folder2\Folder3\file.txt` has depth `3`. |
 | `MaxFilesPerRun` | Optional maximum number of eligible files to process in one run. Default is `null`, which means unlimited. The alias `max_files_per_run` is also supported. Files are sorted by `CreationTime` ascending before the limit is applied, so the oldest files are processed first. |
 | `DeleteEmptyFolders` | Controls whether empty source subfolders are deleted after successful moves. Default: `true`. Aliases: `CleanupEmptyFolders`, `delete_empty_folders`. |
@@ -385,6 +388,38 @@ Protected empty folders:
 - Later patterns override earlier patterns, so `!templates/tmp` can unprotect a folder previously matched by `templates/**`.
 - Protected empty source folders are kept during cleanup.
 - Protected empty folders are also mirrored into the archive even when they contain no files. For empty folders there is no file date; if `ArchiveFolder` contains `{year}` or `{month}`, the current run date is used for those placeholders. If `ArchiveFolder` has no date placeholder, the empty folder is created directly under that archive folder.
+
+## Delete Old Files Instead of Archiving
+
+If a target should remove old files instead of moving them to an archive folder, set `FileAction` to `delete`:
+
+```json
+{
+  "Targets": [
+    {
+      "Name": "TempCleanup",
+      "Path": "D:\\TempFiles",
+      "Enabled": true,
+      "FileAction": "delete",
+      "OlderThanDays": 30,
+      "Extensions": [".tmp", ".log"]
+    }
+  ]
+}
+```
+
+The delete action uses the same filtering rules as archive mode:
+
+- `OlderThanSeconds` / `OlderThanDays`
+- `DateField`
+- `Extensions`
+- `MaxDepth`
+- `MaxFilesPerRun`
+- `DeleteEmptyFolders`
+- `ProtectedEmptyFolders`
+- `TestMode`
+
+Use `TestMode: true` first. In test mode the script logs `TEST DELETE` entries and does not physically delete files.
 
 ## Max Files Per Run
 
@@ -472,7 +507,7 @@ Supported grouping modes:
 Safety behavior:
 
 - ZIP compression only runs when enabled.
-- Archive group age is checked from archived files' `CreationTime`.
+- Archive group age is checked from archived files using the same `DateField` as moving/archive selection: `LastWriteTime` or `CreationTime`.
 - A group is compressed only when all files in that group are older than the configured threshold.
 - Existing `.zip` archives are skipped, so repeated runs do not create duplicates.
 - The script creates and validates a temporary ZIP before removing the original folder.

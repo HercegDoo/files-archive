@@ -1,0 +1,5 @@
+Akcija nad fajlovima: delete
+OBRISAN [DeleteOldFiles]:
+Obrisano fajlova: 1
+Successfully deleted: 1
+Obrisano praznih foldera [DeleteOldFiles]: 0

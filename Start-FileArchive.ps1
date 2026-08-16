@@ -28,6 +28,7 @@ $BuiltInDefaults = [PSCustomObject]@{
     OlderThanDays    = $null
     DateField        = "LastWriteTime"
     Extensions       = @(".txt")
+    FileAction       = "archive"
     MaxDepth         = $null
     MaxFilesPerRun   = $null
     DeleteEmptyFolders = $true

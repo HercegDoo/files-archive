@@ -1,0 +1,21 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "CreationTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "../Archive/{year}/{month}",
+    "ArchiveZipEnabled": true,
+    "ArchiveZipAfter": "1 year",
+    "ArchiveZipGroupBy": "year",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "ZipCreatedDateSource",
+      "Path": "data/Source",
+      "Enabled": true
+    }
+  ]
+}

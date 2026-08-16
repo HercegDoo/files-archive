@@ -16,6 +16,7 @@ function New-ArchiveSettings {
     $Properties.OlderThanDays = $null
     $Properties.DateField = "LastWriteTime"
     $Properties.Extensions = @(".txt")
+    $Properties.FileAction = "archive"
     $Properties.MaxDepth = $null
     $Properties.MaxFilesPerRun = $null
     $Properties.DeleteEmptyFolders = $true
@@ -149,6 +150,23 @@ function ConvertTo-ArchiveZipGroupBy {
     }
 }
 
+function ConvertTo-ArchiveFileAction {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Value
+    )
+
+    $Action = ([string]$Value).Trim().ToLowerInvariant()
+
+    switch ($Action) {
+        "archive" { return "archive" }
+        "move" { return "archive" }
+        "delete" { return "delete" }
+        "remove" { return "delete" }
+        default { throw "FileAction mora biti 'archive' ili 'delete'. Vrijednost: $Value" }
+    }
+}
+
 function ConvertTo-RetentionAction {
     param(
         [Parameter(Mandatory)]
@@ -213,6 +231,22 @@ function Update-ArchiveSettings {
 
     if (Test-ConfigProperty $Source "Extensions") {
         $Settings.Extensions = @($Source.Extensions)
+    }
+
+    if (Test-ConfigProperty $Source "FileAction") {
+        $Settings.FileAction = ConvertTo-ArchiveFileAction -Value $Source.FileAction
+    }
+
+    if (Test-ConfigProperty $Source "Action") {
+        $Settings.FileAction = ConvertTo-ArchiveFileAction -Value $Source.Action
+    }
+
+    if (Test-ConfigProperty $Source "action") {
+        $Settings.FileAction = ConvertTo-ArchiveFileAction -Value $Source.action
+    }
+
+    if ((Test-ConfigProperty $Source "DeleteOnly") -and [bool]$Source.DeleteOnly) {
+        $Settings.FileAction = "delete"
     }
 
     if (Test-ConfigProperty $Source "MaxNestedDepth") {

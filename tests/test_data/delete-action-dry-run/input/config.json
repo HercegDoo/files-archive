@@ -1,0 +1,18 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "FileAction": "delete",
+    "TestMode": true
+  },
+  "Targets": [
+    {
+      "Name": "DeleteDryRun",
+      "Path": "data/Source",
+      "Enabled": true
+    }
+  ]
+}
