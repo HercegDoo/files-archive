@@ -182,6 +182,83 @@ function Get-ArchiveLogText {
     return ($LogTextParts -join [Environment]::NewLine)
 }
 
+function Get-NormalizedActiveLogLines {
+    param(
+        [Parameter(Mandatory)]
+        [string]$LogsRoot
+    )
+
+    $ActiveLog = Join-Path $LogsRoot "FileArchive.log"
+
+    if (-not (Test-Path -LiteralPath $ActiveLog -PathType Leaf)) {
+        return @()
+    }
+
+    return @(
+        Get-Content -LiteralPath $ActiveLog -Encoding UTF8 |
+            ForEach-Object {
+                ([string]$_) -replace "^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] ", ""
+            }
+    )
+}
+
+function Get-ExpectedExactLogLines {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CaseRoot,
+
+        [Parameter(Mandatory)]
+        [string]$AppRoot
+    )
+
+    $ExpectedExactLogFile = Join-Path $CaseRoot "expected-log-exact.txt"
+
+    if (-not (Test-Path -LiteralPath $ExpectedExactLogFile -PathType Leaf)) {
+        return $null
+    }
+
+    return @(
+        Get-Content -LiteralPath $ExpectedExactLogFile -Encoding UTF8 |
+            ForEach-Object {
+                ([string]$_).Replace("{APP_ROOT}", $AppRoot)
+            }
+    )
+}
+
+function Compare-ExactLogLines {
+    param(
+        [AllowNull()]
+        [string[]]$ExpectedLines,
+
+        [Parameter(Mandatory)]
+        [string[]]$ActualLines
+    )
+
+    $Failures = @()
+
+    if ($null -eq $ExpectedLines) {
+        return $Failures
+    }
+
+    if ($ExpectedLines.Count -ne $ActualLines.Count) {
+        $Failures += "LOG_EXACT_LINE_COUNT expected=$($ExpectedLines.Count) actual=$($ActualLines.Count)"
+    }
+
+    $MaxCount = [math]::Max($ExpectedLines.Count, $ActualLines.Count)
+
+    for ($Index = 0; $Index -lt $MaxCount; $Index++) {
+        $LineNumber = $Index + 1
+        $ExpectedLine = if ($Index -lt $ExpectedLines.Count) { $ExpectedLines[$Index] } else { "<missing>" }
+        $ActualLine = if ($Index -lt $ActualLines.Count) { $ActualLines[$Index] } else { "<missing>" }
+
+        if ($ExpectedLine -ne $ActualLine) {
+            $Failures += "LOG_EXACT_MISMATCH line=$LineNumber expected='$ExpectedLine' actual='$ActualLine'"
+        }
+    }
+
+    return $Failures
+}
+
 function Test-ExpectedLogAssertions {
     param(
         [Parameter(Mandatory)]
@@ -198,6 +275,8 @@ function Test-ExpectedLogAssertions {
     $LogsRoot = Join-Path $AppRoot "Logs"
     $ExpectedLogFiles = Get-ExpectedLines -Path (Join-Path $CaseRoot "expected-log-files.txt")
     $ExpectedLogContains = Get-ExpectedLines -Path (Join-Path $CaseRoot "expected-log-contains.txt")
+    $ExpectedExactLogLines = Get-ExpectedExactLogLines -CaseRoot $CaseRoot -AppRoot $AppRoot
+    $ActualExactLogLines = @(Get-NormalizedActiveLogLines -LogsRoot $LogsRoot)
     $ExpandedLogsRoot = Join-Path $CaseResult "expanded-logs"
     $AllLogText = Get-ArchiveLogText -LogsRoot $LogsRoot -ExtractionRoot $ExpandedLogsRoot
 
@@ -214,6 +293,8 @@ function Test-ExpectedLogAssertions {
             $Failures += "LOG_TEXT_MISSING $ExpectedText"
         }
     }
+
+    $Failures += Compare-ExactLogLines -ExpectedLines $ExpectedExactLogLines -ActualLines $ActualExactLogLines
 
     return $Failures
 }

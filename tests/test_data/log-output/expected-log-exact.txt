@@ -1,0 +1,26 @@
+============================================================
+Pokretanje arhiviranja
+Broj ciljnih putanja: 1
+Limit log fajla: 5 MB
+Broj rotiranih logova: 2
+============================================================
+------------------------------------------------------------
+CILJ: LogSource
+Putanja: {APP_ROOT}/data/LogSource
+Arhiva: {APP_ROOT}/data/LogSource/Archive
+Starost: 86400 sekundi
+Datum za arhivu: LastWriteTime
+Ekstenzije: .txt
+Maksimalna dubina: neograniceno
+TestMode: False
+Pronadjeno fajlova: 1
+PREMJESTEN [LogSource]: '{APP_ROOT}/data/LogSource/logged-file.txt' -> '{APP_ROOT}/data/LogSource/Archive/2020/logged-file.txt'
+Obrisano praznih foldera: 0
+============================================================
+Arhiviranje zavrseno
+Pronadjeno: 1
+Premjesteno: 1
+Testirano: 0
+Preskoceno: 0
+Greske: 0
+============================================================
