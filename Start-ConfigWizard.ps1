@@ -7,7 +7,12 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
 
-$ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ScriptRoot = if ([string]::IsNullOrWhiteSpace($env:FILE_ARCHIVE_PORTABLE_ROOT)) {
+    Split-Path -Parent $MyInvocation.MyCommand.Path
+}
+else {
+    $env:FILE_ARCHIVE_PORTABLE_ROOT
+}
 
 if ([string]::IsNullOrWhiteSpace($ConfigFile)) {
     $ConfigFile = Join-Path $ScriptRoot "config.json"
@@ -210,9 +215,16 @@ function Save-WizardConfig {
 }
 
 function New-WizardTaskConfig {
+    $DefaultScriptPath = if ([string]::IsNullOrWhiteSpace($env:FILE_ARCHIVE_PORTABLE_SCRIPT)) {
+        Join-Path $ScriptRoot "Start-FileArchive.ps1"
+    }
+    else {
+        $env:FILE_ARCHIVE_PORTABLE_SCRIPT
+    }
+
     return [PSCustomObject]@{
         TaskName = "FileArchive"
-        ScriptPath = (Join-Path $ScriptRoot "Start-FileArchive.ps1")
+        ScriptPath = $DefaultScriptPath
         WorkingDirectory = $ScriptRoot
         ScheduleType = "Daily"
         StartTime = "02:00"

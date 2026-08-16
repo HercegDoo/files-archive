@@ -2,3 +2,4 @@
 Logs/
 ./config.json
 tests/test_results/
+dist/
