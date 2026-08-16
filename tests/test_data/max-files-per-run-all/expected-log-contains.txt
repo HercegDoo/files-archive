@@ -1,0 +1,7 @@
+Files eligible for archive: 3
+Max files per run: 10
+Files selected: 3
+Files remaining: 0
+Odabrano: 3
+Premjesteno: 3
+Remaining backlog: 0

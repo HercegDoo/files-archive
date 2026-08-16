@@ -259,6 +259,21 @@ function Compare-ExactLogLines {
     return $Failures
 }
 
+function Get-ExpectedExitCode {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CaseRoot
+    )
+
+    $ExpectedExitCodeFile = Join-Path $CaseRoot "expected-exit-code.txt"
+
+    if (-not (Test-Path -LiteralPath $ExpectedExitCodeFile -PathType Leaf)) {
+        return 0
+    }
+
+    return [int]((Get-Content -LiteralPath $ExpectedExitCodeFile -Raw -Encoding UTF8).Trim())
+}
+
 function Test-ExpectedLogAssertions {
     param(
         [Parameter(Mandatory)]
@@ -331,6 +346,7 @@ function Invoke-TestCase {
     $CaseInput = Join-Path $Case.FullName "input"
     $CaseExpected = Join-Path $Case.FullName "expected/data"
     $CaseTimes = Join-Path $Case.FullName "file-times.json"
+    $ExpectedExitCode = Get-ExpectedExitCode -CaseRoot $Case.FullName
     $CaseResult = Join-Path $ResultsRoot $CaseName
     $AppRoot = Join-Path (Join-Path $ScratchRoot $CaseName) "app"
 
@@ -379,8 +395,8 @@ function Invoke-TestCase {
             "$Prefix $($_.InputObject)"
         })
 
-    if ($ExitCode -ne 0) {
-        $Diff += "SCRIPT_EXIT_CODE $ExitCode"
+    if ($ExitCode -ne $ExpectedExitCode) {
+        $Diff += "SCRIPT_EXIT_CODE expected=$ExpectedExitCode actual=$ExitCode"
     }
 
     $Diff += Test-ExpectedLogAssertions -CaseRoot $Case.FullName -AppRoot $AppRoot -CaseResult $CaseResult

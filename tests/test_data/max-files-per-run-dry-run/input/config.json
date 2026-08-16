@@ -1,0 +1,19 @@
+{
+  "max_files_per_run": 2,
+  "dry_run": true,
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive/{year}"
+  },
+  "Targets": [
+    {
+      "Name": "DryLimitedSource",
+      "Path": "data/DryLimitedSource",
+      "Enabled": true
+    }
+  ]
+}

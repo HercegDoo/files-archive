@@ -148,6 +148,7 @@ The FSRM task account must have read access to source folders and write access t
     "DateField": "LastWriteTime",
     "Extensions": [".txt", ".pdf", ".docx", ".bmp"],
     "MaxDepth": null,
+    "MaxFilesPerRun": 10000,
     "ArchiveFolder": "Arhiva",
     "TestMode": false
   },
@@ -185,15 +186,70 @@ The FSRM task account must have read access to source folders and write access t
 | `DateField` | Date used for age checks and `{year}` / `{month}` archive folders. Supported values: `LastWriteTime` and `CreationTime`. Default: `LastWriteTime`. |
 | `Extensions` | File extensions that are allowed to be archived. |
 | `MaxDepth` | Optional maximum folder depth to scan under the source folder. Default is `null`, which means unlimited. Root files have depth `0`; `Folder1\file.txt` has depth `1`; `Folder1\Folder2\Folder3\file.txt` has depth `3`. |
+| `MaxFilesPerRun` | Optional maximum number of eligible files to process in one run. Default is `null`, which means unlimited. The alias `max_files_per_run` is also supported. Files are sorted by `CreationTime` ascending before the limit is applied, so the oldest files are processed first. |
 | `ArchiveFolder` | Archive folder or archive path. Can include `{year}` and `{month}`. |
 | `ArchivePath` | Optional explicit archive path. If set, it takes priority over `ArchiveFolder`. |
-| `TestMode` | When `true`, logs what would happen without moving files. |
+| `TestMode` | When `true`, logs what would happen without moving files. Aliases `DryRun` and `dry_run` are also supported. |
 | `Enabled` | Enables or disables one target. |
 
 Recommended `DateField`:
 
 - Use `LastWriteTime` for normal document archives. This means the archive month follows the last time the file content changed.
 - Use `CreationTime` only when the original creation date is reliable in your environment. On Windows, this value can change when files are copied, restored, downloaded, or extracted.
+
+## Max Files Per Run
+
+Use `MaxFilesPerRun` to limit how many eligible files are handled in a single run:
+
+```json
+{
+  "Defaults": {
+    "MaxFilesPerRun": 10000
+  }
+}
+```
+
+This snake_case form is also supported:
+
+```json
+{
+  "max_files_per_run": 10000
+}
+```
+
+Behavior:
+
+- The script first finds all eligible files from enabled targets.
+- It sorts candidates by `CreationTime` ascending.
+- It selects at most `MaxFilesPerRun` files.
+- Files not selected remain in place for the next run.
+- In `TestMode: true`, the same limit is applied, but files are only logged as test actions and are not moved.
+
+Example with 35,000 eligible files and `MaxFilesPerRun: 10000`:
+
+```text
+Run #1 -> 10,000 files
+Run #2 -> 10,000 files
+Run #3 -> 10,000 files
+Run #4 ->  5,000 files
+```
+
+The run log includes selection counts and a summary:
+
+```text
+Files eligible for archive: 35000
+Max files per run: 10000
+Files selected: 10000
+Files remaining: 25000
+
+===== ARCHIVE RUN SUMMARY =====
+Eligible files: 35000
+Selected files: 10000
+Successfully archived: 9985
+Skipped: 8
+Failed: 7
+Remaining backlog: 25000
+```
 
 ## Archive Folder Templates
 
@@ -290,6 +346,7 @@ tests
         |-- expected
         |   `-- data
         |-- expected-dirs.txt
+        |-- expected-exit-code.txt
         |-- expected-log-contains.txt
         |-- expected-log-exact.txt
         |-- expected-log-files.txt
@@ -302,6 +359,7 @@ How it works:
 - `file-times.json` sets deterministic file timestamps before the script runs.
 - `expected/data` is the expected final state after archiving.
 - `expected-dirs.txt` is optional and lists expected empty directories under `data`, one path per line.
+- `expected-exit-code.txt` is optional and contains the expected script exit code. Default is `0`.
 - `expected-log-contains.txt` is optional and lists text fragments that must appear in the active or rotated logs.
 - `expected-log-exact.txt` is optional and compares the active `FileArchive.log` line-by-line after removing timestamp prefixes. It supports `{APP_ROOT}` for the temporary application path.
 - `expected-log-files.txt` is optional and lists log files that must exist under `Logs`, for example `FileArchive.log.1.zip`.
@@ -312,7 +370,7 @@ How it works:
   - `diff.txt`
   - script logs
 
-To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, optional expected empty directories in `expected-dirs.txt`, optional log checks in `expected-log-contains.txt` / `expected-log-exact.txt` / `expected-log-files.txt`, and timestamp entries in `file-times.json`.
+To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, optional expected empty directories in `expected-dirs.txt`, optional expected exit code in `expected-exit-code.txt`, optional log checks in `expected-log-contains.txt` / `expected-log-exact.txt` / `expected-log-files.txt`, and timestamp entries in `file-times.json`.
 
 ## Notes
 

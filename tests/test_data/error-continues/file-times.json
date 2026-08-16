@@ -1,0 +1,4 @@
+[
+  { "Path": "data/BlockedSource/blocked.txt", "CreationTime": "2020-01-01T00:00:00Z" },
+  { "Path": "data/GoodSource/good.txt", "CreationTime": "2020-01-02T00:00:00Z" }
+]

@@ -1,0 +1,10 @@
+Files eligible for archive: 3
+Max files per run: 2
+Files selected: 2
+Files remaining: 1
+TEST [DryLimitedSource]
+Odabrano: 2
+Premjesteno: 0
+Testirano: 2
+Successfully archived: 0
+Remaining backlog: 1
