@@ -123,6 +123,7 @@ dist
 ```
 
 Copy only `FileArchive.Portable.ps1` to a server if you want a single-file deployment.
+On first use, the portable script unpacks the normal runtime files into `files-archive-runtime` next to the portable file and then runs those normal scripts. This keeps the release download simple while avoiding fragile in-memory wizard execution.
 
 Start the portable menu:
 
