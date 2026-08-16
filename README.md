@@ -135,7 +135,7 @@ The menu provides these basic actions:
 
 - run the archive script
 - build or edit `config.json` through the wizard
-- register or update the Windows Scheduled Task
+- register or update the Windows Scheduled Task; if `scheduled-task.json` does not exist, the portable menu first opens the task wizard to create it
 - extract the normal multi-file runtime
 - show active paths/status
 
