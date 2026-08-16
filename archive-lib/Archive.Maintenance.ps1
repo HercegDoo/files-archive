@@ -71,16 +71,24 @@ function Test-ArchiveGroupOldEnough {
         [System.IO.FileInfo[]]$Files,
 
         [Parameter(Mandatory)]
-        [datetime]$CutoffDate
+        [datetime]$CutoffDate,
+
+        [Parameter(Mandatory)]
+        [string]$DateField
     )
 
     if ($Files.Count -eq 0) {
         return $false
     }
 
-    $NewestCreationTime = ($Files | Sort-Object CreationTimeUtc -Descending | Select-Object -First 1).CreationTimeUtc
+    $NewestArchiveDate = (
+        $Files |
+            Sort-Object @{ Expression = { (Get-ArchiveDate -File $_ -DateField $DateField).ToUniversalTime() }; Descending = $true } |
+            Select-Object -First 1 |
+            ForEach-Object { (Get-ArchiveDate -File $_ -DateField $DateField).ToUniversalTime() }
+    )
 
-    return $NewestCreationTime -lt $CutoffDate.ToUniversalTime()
+    return $NewestArchiveDate -lt $CutoffDate.ToUniversalTime()
 }
 
 function Get-ZipEntryNames {
@@ -232,7 +240,7 @@ function Invoke-ArchiveZipMaintenance {
 
     $CutoffDate = Get-ArchiveAgeCutoffDate -Age $Settings.ArchiveZipAfter
 
-    Write-ArchiveLog "ZIP maintenance [$($Context.TargetName)]: group_by=$($Settings.ArchiveZipGroupBy), cutoff=$($CutoffDate.ToString("yyyy-MM-dd"))" -LogFile $LogFile
+    Write-ArchiveLog "ZIP maintenance [$($Context.TargetName)]: group_by=$($Settings.ArchiveZipGroupBy), date_field=$($Settings.DateField), cutoff=$($CutoffDate.ToString("yyyy-MM-dd"))" -LogFile $LogFile
 
     if ($Settings.ArchiveZipGroupBy -eq "year") {
         $YearDirectories = @(Get-ChildItem -LiteralPath $ArchiveBaseRoot -Directory -Force | Where-Object {
@@ -242,7 +250,7 @@ function Invoke-ArchiveZipMaintenance {
         foreach ($YearDirectory in $YearDirectories) {
             $Files = @(Get-ArchiveFilesUnderPath -Path $YearDirectory.FullName)
 
-            if (-not (Test-ArchiveGroupOldEnough -Files $Files -CutoffDate $CutoffDate)) {
+            if (-not (Test-ArchiveGroupOldEnough -Files $Files -CutoffDate $CutoffDate -DateField $Settings.DateField)) {
                 continue
             }
 
@@ -262,7 +270,7 @@ function Invoke-ArchiveZipMaintenance {
     foreach ($MonthDirectory in $MonthDirectories) {
         $Files = @(Get-ArchiveFilesUnderPath -Path $MonthDirectory.FullName)
 
-        if (-not (Test-ArchiveGroupOldEnough -Files $Files -CutoffDate $CutoffDate)) {
+        if (-not (Test-ArchiveGroupOldEnough -Files $Files -CutoffDate $CutoffDate -DateField $Settings.DateField)) {
             continue
         }
 

@@ -5,6 +5,7 @@
     "OlderThanSeconds": 60.0,
     "DateField": "CreationTime",
     "Extensions": [".txt", ".pdf"],
+    "FileAction": "archive",
     "MaxDepth": 3,
     "MaxFilesPerRun": 100,
     "DeleteEmptyFolders": true,
@@ -27,6 +28,7 @@
       "ArchiveFolder": "../ArchiveEdited/{year}",
       "OlderThanSeconds": 120.0,
       "Extensions": [".txt"],
+      "FileAction": "archive",
       "MaxDepth": 1,
       "DeleteEmptyFolders": true,
       "ProtectedEmptyFolders": ["keep-edited"]

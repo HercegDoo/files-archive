@@ -1,0 +1,6 @@
+[
+  { "Path": "data/Source/old/delete-me.txt", "LastWriteTime": "2020-01-05T10:00:00Z" },
+  { "Path": "data/Source/new/keep-new.txt", "LastWriteTime": "2026-08-16T10:00:00Z" },
+  { "Path": "data/Source/old/keep-extension.pdf", "LastWriteTime": "2020-01-05T10:00:00Z" },
+  { "Path": "data/Source/deep/a/b/keep-depth.txt", "LastWriteTime": "2020-01-05T10:00:00Z" }
+]

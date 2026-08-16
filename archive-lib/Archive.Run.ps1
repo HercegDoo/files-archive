@@ -3,6 +3,7 @@ function New-ArchiveResult {
         [int]$Found = 0,
         [int]$Selected = 0,
         [int]$Moved = 0,
+        [int]$Deleted = 0,
         [int]$Tested = 0,
         [int]$Skipped = 0,
         [int]$Errors = 0
@@ -12,6 +13,7 @@ function New-ArchiveResult {
         Found    = $Found
         Selected = $Selected
         Moved    = $Moved
+        Deleted  = $Deleted
         Tested   = $Tested
         Skipped  = $Skipped
         Errors   = $Errors
@@ -30,6 +32,7 @@ function Add-ArchiveResult {
     $Target.Found += $Source.Found
     $Target.Selected += $Source.Selected
     $Target.Moved += $Source.Moved
+    $Target.Deleted += $Source.Deleted
     $Target.Tested += $Source.Tested
     $Target.Skipped += $Source.Skipped
     $Target.Errors += $Source.Errors
@@ -92,6 +95,9 @@ function New-ArchiveTargetContext {
     Write-ArchiveLog "Starost: $($Settings.OlderThanSeconds) sekundi" -LogFile $LogFile
     Write-ArchiveLog "Datum za arhivu: $($Settings.DateField)" -LogFile $LogFile
     Write-ArchiveLog "Ekstenzije: $($Settings.Extensions -join ', ')" -LogFile $LogFile
+    if ($Settings.FileAction -ne "archive") {
+        Write-ArchiveLog "Akcija nad fajlovima: $($Settings.FileAction)" -LogFile $LogFile
+    }
     Write-ArchiveLog "Maksimalna dubina: $(if ($null -eq $Settings.MaxDepth) { 'neograniceno' } else { $Settings.MaxDepth })" -LogFile $LogFile
     if (-not $Settings.DeleteEmptyFolders -or @($Settings.ProtectedEmptyFolders).Count -gt 0) {
         Write-ArchiveLog "Brisanje praznih foldera: $($Settings.DeleteEmptyFolders)" -LogFile $LogFile
@@ -180,6 +186,20 @@ function Invoke-ArchiveCandidate {
     $TargetName = $Context.TargetName
 
     try {
+        if ($Settings.FileAction -eq "delete") {
+            if ($Settings.TestMode) {
+                Write-ArchiveLog "TEST DELETE [$TargetName]: '$($File.FullName)'" -LogFile $LogFile
+                $Context.Result.Tested++
+                return
+            }
+
+            Remove-Item -LiteralPath $File.FullName -Force
+            Write-ArchiveLog "OBRISAN [$TargetName]: '$($File.FullName)'" -LogFile $LogFile
+
+            $Context.Result.Deleted++
+            return
+        }
+
         $DestinationParams = @{
             File        = $File
             SourceRoot  = $Context.SourceRoot
@@ -275,16 +295,18 @@ function Invoke-ArchiveRun {
             -not $Context.Settings.TestMode
         ) {
             if (@($Context.Settings.ProtectedEmptyFolders).Count -gt 0) {
-                $CreatedProtectedDirectories = Ensure-ProtectedEmptyDirectoriesInArchive `
-                    -SourceRoot $Context.SourceRoot `
-                    -ArchiveRoot $Context.ArchiveRoot `
-                    -ProtectedPatterns @($Context.Settings.ProtectedEmptyFolders) `
-                    -Date (Get-Date)
+                if ($Context.Settings.FileAction -eq "archive") {
+                    $CreatedProtectedDirectories = Ensure-ProtectedEmptyDirectoriesInArchive `
+                        -SourceRoot $Context.SourceRoot `
+                        -ArchiveRoot $Context.ArchiveRoot `
+                        -ProtectedPatterns @($Context.Settings.ProtectedEmptyFolders) `
+                        -Date (Get-Date)
 
-                Write-ArchiveLog "Kreirano protected empty folders u arhivi [$($Context.TargetName)]: $CreatedProtectedDirectories" -LogFile $LogFile
+                    Write-ArchiveLog "Kreirano protected empty folders u arhivi [$($Context.TargetName)]: $CreatedProtectedDirectories" -LogFile $LogFile
+                }
             }
 
-            if ($Context.Result.Moved -gt 0) {
+            if (($Context.Result.Moved + $Context.Result.Deleted) -gt 0) {
                 if ($Context.Settings.DeleteEmptyFolders) {
                     $RemovedDirectories = Remove-EmptySourceDirectories `
                         -SourceRoot $Context.SourceRoot `
@@ -319,6 +341,9 @@ function Invoke-ArchiveRun {
     Write-ArchiveLog "Pronadjeno: $($Totals.Found)" -LogFile $LogFile
     Write-ArchiveLog "Odabrano: $($Totals.Selected)" -LogFile $LogFile
     Write-ArchiveLog "Premjesteno: $($Totals.Moved)" -LogFile $LogFile
+    if ($Totals.Deleted -gt 0) {
+        Write-ArchiveLog "Obrisano fajlova: $($Totals.Deleted)" -LogFile $LogFile
+    }
     Write-ArchiveLog "Testirano: $($Totals.Tested)" -LogFile $LogFile
     Write-ArchiveLog "Preskoceno: $($Totals.Skipped)" -LogFile $LogFile
     Write-ArchiveLog "Greske: $($Totals.Errors)" -LogFile $LogFile
@@ -327,6 +352,9 @@ function Invoke-ArchiveRun {
     Write-ArchiveLog "Eligible files: $($Totals.Found)" -LogFile $LogFile
     Write-ArchiveLog "Selected files: $($Totals.Selected)" -LogFile $LogFile
     Write-ArchiveLog "Successfully archived: $($Totals.Moved)" -LogFile $LogFile
+    if ($Totals.Deleted -gt 0) {
+        Write-ArchiveLog "Successfully deleted: $($Totals.Deleted)" -LogFile $LogFile
+    }
     Write-ArchiveLog "Skipped: $($Totals.Skipped)" -LogFile $LogFile
     Write-ArchiveLog "Failed: $($Totals.Errors)" -LogFile $LogFile
     Write-ArchiveLog "Remaining backlog: $RemainingFiles" -LogFile $LogFile

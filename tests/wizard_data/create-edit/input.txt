@@ -5,6 +5,7 @@
 60
 CreationTime
 .txt,.pdf
+archive
 3
 100
 true
@@ -25,6 +26,7 @@ true
 ../Archive/{year}/{month}
 30
 .pdf,.docx
+archive
 2
 true
 keep
@@ -32,6 +34,7 @@ keep
 DisabledSource
 data/Disabled
 true
+
 
 
 
@@ -46,6 +49,7 @@ true
 ../ArchiveEdited/{year}
 120
 .txt
+archive
 1
 true
 keep-edited
