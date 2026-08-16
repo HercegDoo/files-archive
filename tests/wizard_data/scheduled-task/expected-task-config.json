@@ -1,0 +1,12 @@
+{
+  "TaskName": "NightlyFileArchive",
+  "ScriptPath": "C:\\ArhivaTest\\Start-FileArchive.ps1",
+  "WorkingDirectory": "C:\\ArhivaTest",
+  "ScheduleType": "Daily",
+  "StartTime": "02:30",
+  "Interval": 1,
+  "DaysOfWeek": "Monday",
+  "UserId": "SYSTEM",
+  "RunElevated": true,
+  "Enabled": true
+}

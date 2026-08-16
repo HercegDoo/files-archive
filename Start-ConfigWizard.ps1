@@ -1,5 +1,6 @@
 param(
     [string]$ConfigFile,
+    [string]$TaskConfigFile,
     [string]$InputFile
 )
 
@@ -10,6 +11,10 @@ $ScriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 if ([string]::IsNullOrWhiteSpace($ConfigFile)) {
     $ConfigFile = Join-Path $ScriptRoot "config.json"
+}
+
+if ([string]::IsNullOrWhiteSpace($TaskConfigFile)) {
+    $TaskConfigFile = Join-Path $ScriptRoot "scheduled-task.json"
 }
 
 $script:WizardInputLines = @()
@@ -202,6 +207,91 @@ function Save-WizardConfig {
 
     $Config | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Path -Encoding UTF8
     Write-Host "Config sacuvan: $Path"
+}
+
+function New-WizardTaskConfig {
+    return [PSCustomObject]@{
+        TaskName = "FileArchive"
+        ScriptPath = (Join-Path $ScriptRoot "Start-FileArchive.ps1")
+        WorkingDirectory = $ScriptRoot
+        ScheduleType = "Daily"
+        StartTime = "02:00"
+        Interval = 1
+        DaysOfWeek = @("Monday")
+        UserId = "SYSTEM"
+        RunElevated = $true
+        Enabled = $true
+    }
+}
+
+function Import-WizardTaskConfig {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return New-WizardTaskConfig
+    }
+
+    $TaskConfig = Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json
+    $Defaults = New-WizardTaskConfig
+
+    foreach ($Property in $Defaults.PSObject.Properties.Name) {
+        if (-not ($TaskConfig.PSObject.Properties.Name -contains $Property)) {
+            Set-ObjectProperty -Object $TaskConfig -Name $Property -Value $Defaults.$Property
+        }
+    }
+
+    return $TaskConfig
+}
+
+function Save-WizardTaskConfig {
+    param(
+        [Parameter(Mandatory)]
+        [object]$TaskConfig,
+
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    $Directory = Split-Path -Parent $Path
+
+    if (-not [string]::IsNullOrWhiteSpace($Directory) -and -not (Test-Path -LiteralPath $Directory -PathType Container)) {
+        New-Item -ItemType Directory -Path $Directory -Force | Out-Null
+    }
+
+    $TaskConfig | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $Path -Encoding UTF8
+    Write-Host "Task config sacuvan: $Path"
+}
+
+function Configure-ScheduledTask {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    $TaskConfig = Import-WizardTaskConfig -Path $Path
+
+    Set-ObjectProperty -Object $TaskConfig -Name "TaskName" -Value ([string](Read-WizardValue "Task name" $TaskConfig.TaskName))
+    Set-ObjectProperty -Object $TaskConfig -Name "ScriptPath" -Value ([string](Read-WizardValue "Archive script path" $TaskConfig.ScriptPath))
+    Set-ObjectProperty -Object $TaskConfig -Name "WorkingDirectory" -Value ([string](Read-WizardValue "Working directory" $TaskConfig.WorkingDirectory))
+    Set-ObjectProperty -Object $TaskConfig -Name "ScheduleType" -Value ([string](Read-WizardValue "ScheduleType Daily/Hourly/Weekly/AtStartup" $TaskConfig.ScheduleType))
+    Set-ObjectProperty -Object $TaskConfig -Name "StartTime" -Value ([string](Read-WizardValue "StartTime HH:mm" $TaskConfig.StartTime))
+    Set-ObjectProperty -Object $TaskConfig -Name "Interval" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "Interval" $TaskConfig.Interval))
+    Set-ObjectProperty -Object $TaskConfig -Name "DaysOfWeek" -Value (ConvertTo-WizardStringArray (Read-WizardValue "DaysOfWeek comma-separated for Weekly" (@($TaskConfig.DaysOfWeek) -join ",")))
+    Set-ObjectProperty -Object $TaskConfig -Name "UserId" -Value ([string](Read-WizardValue "Windows account/UserId" $TaskConfig.UserId))
+    Set-ObjectProperty -Object $TaskConfig -Name "RunElevated" -Value (ConvertTo-WizardBool (Read-WizardValue "RunElevated true/false" $TaskConfig.RunElevated) $TaskConfig.RunElevated)
+    Set-ObjectProperty -Object $TaskConfig -Name "Enabled" -Value (ConvertTo-WizardBool (Read-WizardValue "Task enabled true/false" $TaskConfig.Enabled) $TaskConfig.Enabled)
+
+    Save-WizardTaskConfig -TaskConfig $TaskConfig -Path $Path
+
+    $ApplyNow = ConvertTo-WizardBool (Read-WizardValue "Register/update Windows Scheduled Task now true/false" $false) $false
+
+    if ($ApplyNow) {
+        $RegisterScript = Join-Path $ScriptRoot "Register-FileArchiveScheduledTask.ps1"
+        & powershell.exe -ExecutionPolicy Bypass -File $RegisterScript -TaskConfigFile $Path
+    }
 }
 
 function Get-Targets {
@@ -415,6 +505,7 @@ function Show-WizardMenu {
     Write-Host "6) Remove target"
     Write-Host "7) List targets"
     Write-Host "8) Save"
+    Write-Host "9) Configure Windows Scheduled Task"
     Write-Host "0) Exit"
 }
 
@@ -436,6 +527,7 @@ while ($true) {
         "6" { Remove-Target -Config $Config }
         "7" { Show-Targets -Config $Config }
         "8" { Save-WizardConfig -Config $Config -Path $ConfigFile }
+        "9" { Configure-ScheduledTask -Path $TaskConfigFile }
         "0" { return }
         default { Write-Host "Nepoznata opcija: $Choice" }
     }

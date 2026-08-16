@@ -1,0 +1,13 @@
+9
+NightlyFileArchive
+C:\ArhivaTest\Start-FileArchive.ps1
+C:\ArhivaTest
+Daily
+02:30
+1
+Monday
+SYSTEM
+true
+true
+false
+0

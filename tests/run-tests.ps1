@@ -550,8 +550,10 @@ function Invoke-WizardTestCase {
     $CaseName = $Case.Name
     $CaseResult = Join-Path $ResultsRoot "wizard-$CaseName"
     $ActualConfig = Join-Path $CaseResult "config.json"
+    $ActualTaskConfig = Join-Path $CaseResult "scheduled-task.json"
     $InputFile = Join-Path $Case.FullName "input.txt"
     $ExpectedConfig = Join-Path $Case.FullName "expected-config.json"
+    $ExpectedTaskConfig = Join-Path $Case.FullName "expected-task-config.json"
     $RunOutputPath = Join-Path $CaseResult "run-output.log"
 
     if (Test-Path -LiteralPath $CaseResult) {
@@ -560,7 +562,7 @@ function Invoke-WizardTestCase {
 
     New-Item -ItemType Directory -Path $CaseResult -Force | Out-Null
 
-    $RunOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "Start-ConfigWizard.ps1") -ConfigFile $ActualConfig -InputFile $InputFile 2>&1
+    $RunOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $ProjectRoot "Start-ConfigWizard.ps1") -ConfigFile $ActualConfig -TaskConfigFile $ActualTaskConfig -InputFile $InputFile 2>&1
     $ExitCode = $LASTEXITCODE
     Write-Lines -Path $RunOutputPath -Lines @($RunOutput | ForEach-Object { [string]$_ })
 
@@ -570,10 +572,10 @@ function Invoke-WizardTestCase {
         $Diff += "WIZARD_EXIT_CODE $ExitCode"
     }
 
-    if (-not (Test-Path -LiteralPath $ActualConfig -PathType Leaf)) {
+    if ((Test-Path -LiteralPath $ExpectedConfig -PathType Leaf) -and -not (Test-Path -LiteralPath $ActualConfig -PathType Leaf)) {
         $Diff += "WIZARD_CONFIG_MISSING $ActualConfig"
     }
-    else {
+    elseif (Test-Path -LiteralPath $ExpectedConfig -PathType Leaf) {
         $ExpectedJson = ConvertTo-CanonicalJson -Path $ExpectedConfig
         $ActualJson = ConvertTo-CanonicalJson -Path $ActualConfig
 
@@ -581,6 +583,20 @@ function Invoke-WizardTestCase {
             $Diff += "WIZARD_JSON_MISMATCH"
             Write-Lines -Path (Join-Path $CaseResult "expected-canonical.json") -Lines @($ExpectedJson)
             Write-Lines -Path (Join-Path $CaseResult "actual-canonical.json") -Lines @($ActualJson)
+        }
+    }
+
+    if ((Test-Path -LiteralPath $ExpectedTaskConfig -PathType Leaf) -and -not (Test-Path -LiteralPath $ActualTaskConfig -PathType Leaf)) {
+        $Diff += "WIZARD_TASK_CONFIG_MISSING $ActualTaskConfig"
+    }
+    elseif (Test-Path -LiteralPath $ExpectedTaskConfig -PathType Leaf) {
+        $ExpectedTaskJson = ConvertTo-CanonicalJson -Path $ExpectedTaskConfig
+        $ActualTaskJson = ConvertTo-CanonicalJson -Path $ActualTaskConfig
+
+        if ($ExpectedTaskJson -ne $ActualTaskJson) {
+            $Diff += "WIZARD_TASK_JSON_MISMATCH"
+            Write-Lines -Path (Join-Path $CaseResult "expected-task-canonical.json") -Lines @($ExpectedTaskJson)
+            Write-Lines -Path (Join-Path $CaseResult "actual-task-canonical.json") -Lines @($ActualTaskJson)
         }
     }
 

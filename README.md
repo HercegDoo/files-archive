@@ -117,6 +117,7 @@ The wizard supports:
 - editing targets
 - enabling or disabling targets
 - removing targets
+- configuring a Windows Scheduled Task
 - saving `config.json`
 
 You can also pass an explicit config path:
@@ -129,6 +130,55 @@ For automated tests or scripted setup, pass an input file with one answer per li
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File "C:\ArhivaTest\Start-ConfigWizard.ps1" -ConfigFile "C:\ArhivaTest\config.json" -InputFile "C:\ArhivaTest\wizard-input.txt"
+```
+
+## Windows Scheduled Task
+
+The config wizard can create or update `scheduled-task.json`, which defines how Windows Task Scheduler should run `Start-FileArchive.ps1`.
+
+Supported basic schedule options:
+
+- `Daily`
+- `Hourly`
+- `Weekly`
+- `AtStartup`
+
+The wizard asks for:
+
+- task name
+- archive script path
+- working directory
+- schedule type
+- start time
+- interval
+- days of week for weekly schedules
+- Windows account, default `SYSTEM`
+- run elevated
+- enabled/disabled state
+
+To register or update the task on Windows after creating `scheduled-task.json`:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File "C:\ArhivaTest\Register-FileArchiveScheduledTask.ps1" -TaskConfigFile "C:\ArhivaTest\scheduled-task.json"
+```
+
+You can also let the wizard apply it immediately when prompted. Registering the task requires Windows and access to Task Scheduler permissions.
+
+Example `scheduled-task.json`:
+
+```json
+{
+  "TaskName": "NightlyFileArchive",
+  "ScriptPath": "C:\\ArhivaTest\\Start-FileArchive.ps1",
+  "WorkingDirectory": "C:\\ArhivaTest",
+  "ScheduleType": "Daily",
+  "StartTime": "02:30",
+  "Interval": 1,
+  "DaysOfWeek": "Monday",
+  "UserId": "SYSTEM",
+  "RunElevated": true,
+  "Enabled": true
+}
 ```
 
 ## Scheduled Run With FSRM
