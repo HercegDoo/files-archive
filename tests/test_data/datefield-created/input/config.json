@@ -1,0 +1,18 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "Created",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive/{year}/{month}",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "CreatedSource",
+      "Path": "data/CreatedSource",
+      "Enabled": true
+    }
+  ]
+}

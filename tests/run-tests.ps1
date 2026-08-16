@@ -119,6 +119,105 @@ function Get-ExpectedExtraDirectoryManifest {
     )
 }
 
+function Get-ExpectedLines {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return @()
+    }
+
+    return @(
+        Get-Content -LiteralPath $Path -Encoding UTF8 |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object { ([string]$_).Trim() }
+    )
+}
+
+function Get-ArchiveLogText {
+    param(
+        [Parameter(Mandatory)]
+        [string]$LogsRoot,
+
+        [Parameter(Mandatory)]
+        [string]$ExtractionRoot
+    )
+
+    $LogTextParts = @()
+
+    if (-not (Test-Path -LiteralPath $LogsRoot -PathType Container)) {
+        return ""
+    }
+
+    $ActiveLog = Join-Path $LogsRoot "FileArchive.log"
+
+    if (Test-Path -LiteralPath $ActiveLog -PathType Leaf) {
+        $LogTextParts += Get-Content -LiteralPath $ActiveLog -Raw -Encoding UTF8
+    }
+
+    $RotatedLogs = @(
+        Get-ChildItem -LiteralPath $LogsRoot -Filter "FileArchive.log.*.zip" -File -Force |
+            Sort-Object Name
+    )
+
+    foreach ($RotatedLog in $RotatedLogs) {
+        $RotatedExtractionRoot = Join-Path $ExtractionRoot $RotatedLog.BaseName
+
+        if (Test-Path -LiteralPath $RotatedExtractionRoot) {
+            Remove-Item -LiteralPath $RotatedExtractionRoot -Recurse -Force
+        }
+
+        New-Item -ItemType Directory -Path $RotatedExtractionRoot -Force | Out-Null
+        Expand-Archive -LiteralPath $RotatedLog.FullName -DestinationPath $RotatedExtractionRoot -Force
+
+        $ExtractedFiles = @(Get-ChildItem -LiteralPath $RotatedExtractionRoot -File -Recurse -Force | Sort-Object FullName)
+
+        foreach ($ExtractedFile in $ExtractedFiles) {
+            $LogTextParts += Get-Content -LiteralPath $ExtractedFile.FullName -Raw -Encoding UTF8
+        }
+    }
+
+    return ($LogTextParts -join [Environment]::NewLine)
+}
+
+function Test-ExpectedLogAssertions {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CaseRoot,
+
+        [Parameter(Mandatory)]
+        [string]$AppRoot,
+
+        [Parameter(Mandatory)]
+        [string]$CaseResult
+    )
+
+    $Failures = @()
+    $LogsRoot = Join-Path $AppRoot "Logs"
+    $ExpectedLogFiles = Get-ExpectedLines -Path (Join-Path $CaseRoot "expected-log-files.txt")
+    $ExpectedLogContains = Get-ExpectedLines -Path (Join-Path $CaseRoot "expected-log-contains.txt")
+    $ExpandedLogsRoot = Join-Path $CaseResult "expanded-logs"
+    $AllLogText = Get-ArchiveLogText -LogsRoot $LogsRoot -ExtractionRoot $ExpandedLogsRoot
+
+    foreach ($ExpectedLogFile in $ExpectedLogFiles) {
+        $LogFilePath = Join-Path $LogsRoot $ExpectedLogFile
+
+        if (-not (Test-Path -LiteralPath $LogFilePath -PathType Leaf)) {
+            $Failures += "LOG_FILE_MISSING $ExpectedLogFile"
+        }
+    }
+
+    foreach ($ExpectedText in $ExpectedLogContains) {
+        if (-not $AllLogText.Contains($ExpectedText)) {
+            $Failures += "LOG_TEXT_MISSING $ExpectedText"
+        }
+    }
+
+    return $Failures
+}
+
 function Write-Lines {
     param(
         [Parameter(Mandatory)]
@@ -175,9 +274,9 @@ function Invoke-TestCase {
     $ExitCode = $LASTEXITCODE
     Write-Lines -Path $RunOutputPath -Lines @($RunOutput | ForEach-Object { [string]$_ })
 
-    $LogFile = Join-Path $AppRoot "Logs/FileArchive.log"
-    if (Test-Path -LiteralPath $LogFile -PathType Leaf) {
-        Copy-Item -LiteralPath $LogFile -Destination (Join-Path $CaseResult "FileArchive.log") -Force
+    $LogsRoot = Join-Path $AppRoot "Logs"
+    if (Test-Path -LiteralPath $LogsRoot -PathType Container) {
+        Copy-Item -LiteralPath $LogsRoot -Destination $CaseResult -Recurse -Force
     }
 
     $ActualData = Join-Path $AppRoot "data"
@@ -202,6 +301,8 @@ function Invoke-TestCase {
     if ($ExitCode -ne 0) {
         $Diff += "SCRIPT_EXIT_CODE $ExitCode"
     }
+
+    $Diff += Test-ExpectedLogAssertions -CaseRoot $Case.FullName -AppRoot $AppRoot -CaseResult $CaseResult
 
     Write-Lines -Path (Join-Path $CaseResult "diff.txt") -Lines $Diff
 
@@ -243,6 +344,10 @@ foreach ($Case in $Cases) {
 if ($Failed -gt 0) {
     Write-Host "$Failed testova je palo. Detalji su u tests/test_results."
     exit 1
+}
+
+if (Test-Path -LiteralPath $ResultsRoot) {
+    Remove-Item -LiteralPath $ResultsRoot -Recurse -Force
 }
 
 Write-Host "Svi testovi su prosli."

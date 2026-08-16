@@ -1,0 +1,6 @@
+Limit log fajla: 0.0005 MB
+CILJ: RotationSource
+Pronadjeno fajlova: 6
+PREMJESTEN [RotationSource]
+Premjesteno: 6
+Greske: 0

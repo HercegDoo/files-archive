@@ -290,6 +290,8 @@ tests
         |-- expected
         |   `-- data
         |-- expected-dirs.txt
+        |-- expected-log-contains.txt
+        |-- expected-log-files.txt
         `-- file-times.json
 ```
 
@@ -299,14 +301,16 @@ How it works:
 - `file-times.json` sets deterministic file timestamps before the script runs.
 - `expected/data` is the expected final state after archiving.
 - `expected-dirs.txt` is optional and lists expected empty directories under `data`, one path per line.
-- `tests/test_results/<case-name>` is generated after each run and contains:
+- `expected-log-contains.txt` is optional and lists text fragments that must appear in the active or rotated logs.
+- `expected-log-files.txt` is optional and lists log files that must exist under `Logs`, for example `FileArchive.log.1.zip`.
+- `tests/test_results/<case-name>` is generated during the run and kept only when a test fails. It contains:
   - `actual/` with the real resulting `data` tree
   - `actual-tree.txt`
   - `expected-tree.txt`
   - `diff.txt`
   - script logs
 
-To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, optional expected empty directories in `expected-dirs.txt`, and timestamp entries in `file-times.json`.
+To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, optional expected empty directories in `expected-dirs.txt`, optional log checks in `expected-log-contains.txt` / `expected-log-files.txt`, and timestamp entries in `file-times.json`.
 
 ## Notes
 

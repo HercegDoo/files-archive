@@ -1,0 +1,6 @@
+[
+  { "Path": "data/SourceA/report.txt", "LastWriteTime": "2020-02-01T10:00:00Z" },
+  { "Path": "data/SourceA/manual.pdf", "LastWriteTime": "2020-02-01T10:00:00Z" },
+  { "Path": "data/SourceA/contract.docx", "LastWriteTime": "2020-02-01T10:00:00Z" },
+  { "Path": "data/SourceA/image.jpg", "LastWriteTime": "2020-02-01T10:00:00Z" }
+]

@@ -1,0 +1,8 @@
+Pokretanje arhiviranja
+CILJ: LogSource
+Pronadjeno fajlova: 1
+PREMJESTEN [LogSource]
+Obrisano praznih foldera:
+Arhiviranje zavrseno
+Premjesteno: 1
+Greske: 0

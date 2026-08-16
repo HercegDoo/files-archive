@@ -1,0 +1,4 @@
+Datum za arhivu: CreationTime
+PREMJESTEN [CreatedSource]
+Premjesteno: 1
+Greske: 0
