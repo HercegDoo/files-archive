@@ -20,6 +20,13 @@ function New-ArchiveSettings {
     $Properties.MaxFilesPerRun = $null
     $Properties.ArchiveFolder = "Arhiva"
     $Properties.ArchivePath = $null
+    $Properties.ArchiveZipEnabled = $false
+    $Properties.ArchiveZipAfter = $null
+    $Properties.ArchiveZipGroupBy = "year"
+    $Properties.RetentionEnabled = $false
+    $Properties.RetentionYears = $null
+    $Properties.RetentionAction = "delete"
+    $Properties.SecondaryStorage = $null
     $Properties.MaxLogSizeMB = 10
     $Properties.LogRotateCount = 5
     $Properties.TestMode = $false
@@ -71,6 +78,58 @@ function ConvertTo-ArchiveMaxFilesPerRun {
     }
 
     return [int]$Limit
+}
+
+function ConvertTo-ArchivePositiveNumber {
+    param(
+        [AllowNull()]
+        [object]$Value,
+
+        [Parameter(Mandatory)]
+        [string]$PropertyName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) {
+        return $null
+    }
+
+    $Number = [double]$Value
+
+    if ($Number -le 0) {
+        throw "$PropertyName mora biti veci od 0."
+    }
+
+    return $Number
+}
+
+function ConvertTo-ArchiveZipGroupBy {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Value
+    )
+
+    $GroupBy = ([string]$Value).Trim().ToLowerInvariant()
+
+    switch ($GroupBy) {
+        "year" { return "year" }
+        "month" { return "month" }
+        default { throw "ArchiveZipGroupBy mora biti 'year' ili 'month'. Vrijednost: $Value" }
+    }
+}
+
+function ConvertTo-RetentionAction {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Value
+    )
+
+    $Action = ([string]$Value).Trim().ToLowerInvariant()
+
+    switch ($Action) {
+        "delete" { return "delete" }
+        "move" { return "move" }
+        default { throw "RetentionAction mora biti 'delete' ili 'move'. Vrijednost: $Value" }
+    }
 }
 
 function Update-ArchiveSettings {
@@ -151,6 +210,66 @@ function Update-ArchiveSettings {
         else {
             $Settings.ArchivePath = [string]$Source.ArchivePath
         }
+    }
+
+    if (Test-ConfigProperty $Source "archive_zip_enabled") {
+        $Settings.ArchiveZipEnabled = [bool]$Source.archive_zip_enabled
+    }
+
+    if (Test-ConfigProperty $Source "ArchiveZipEnabled") {
+        $Settings.ArchiveZipEnabled = [bool]$Source.ArchiveZipEnabled
+    }
+
+    if (Test-ConfigProperty $Source "archive_zip_after") {
+        $Settings.ArchiveZipAfter = $Source.archive_zip_after
+    }
+
+    if (Test-ConfigProperty $Source "ArchiveZipAfter") {
+        $Settings.ArchiveZipAfter = $Source.ArchiveZipAfter
+    }
+
+    if (Test-ConfigProperty $Source "ArchiveZipAfterYears") {
+        $Settings.ArchiveZipAfter = "$($Source.ArchiveZipAfterYears) years"
+    }
+
+    if (Test-ConfigProperty $Source "archive_zip_group_by") {
+        $Settings.ArchiveZipGroupBy = ConvertTo-ArchiveZipGroupBy -Value $Source.archive_zip_group_by
+    }
+
+    if (Test-ConfigProperty $Source "ArchiveZipGroupBy") {
+        $Settings.ArchiveZipGroupBy = ConvertTo-ArchiveZipGroupBy -Value $Source.ArchiveZipGroupBy
+    }
+
+    if (Test-ConfigProperty $Source "retention_enabled") {
+        $Settings.RetentionEnabled = [bool]$Source.retention_enabled
+    }
+
+    if (Test-ConfigProperty $Source "RetentionEnabled") {
+        $Settings.RetentionEnabled = [bool]$Source.RetentionEnabled
+    }
+
+    if (Test-ConfigProperty $Source "retention_years") {
+        $Settings.RetentionYears = ConvertTo-ArchivePositiveNumber -Value $Source.retention_years -PropertyName "retention_years"
+    }
+
+    if (Test-ConfigProperty $Source "RetentionYears") {
+        $Settings.RetentionYears = ConvertTo-ArchivePositiveNumber -Value $Source.RetentionYears -PropertyName "RetentionYears"
+    }
+
+    if (Test-ConfigProperty $Source "retention_action") {
+        $Settings.RetentionAction = ConvertTo-RetentionAction -Value $Source.retention_action
+    }
+
+    if (Test-ConfigProperty $Source "RetentionAction") {
+        $Settings.RetentionAction = ConvertTo-RetentionAction -Value $Source.RetentionAction
+    }
+
+    if (Test-ConfigProperty $Source "secondary_storage") {
+        $Settings.SecondaryStorage = [string]$Source.secondary_storage
+    }
+
+    if (Test-ConfigProperty $Source "SecondaryStorage") {
+        $Settings.SecondaryStorage = [string]$Source.SecondaryStorage
     }
 
     if (Test-ConfigProperty $Source "MaxLogSizeMB") {

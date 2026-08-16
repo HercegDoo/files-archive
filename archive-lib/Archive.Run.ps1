@@ -276,6 +276,14 @@ function Invoke-ArchiveRun {
         }
     }
 
+    foreach ($Context in $Contexts) {
+        Invoke-ArchiveZipMaintenance -Context $Context -LogFile $LogFile
+    }
+
+    foreach ($Context in $Contexts) {
+        Invoke-RetentionMaintenance -Context $Context -LogFile $LogFile
+    }
+
     $Totals = New-ArchiveResult
 
     foreach ($Context in $Contexts) {

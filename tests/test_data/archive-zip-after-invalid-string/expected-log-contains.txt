@@ -1,0 +1,2 @@
+KRITICNA GRESKA
+ArchiveZipAfter mora biti npr. '1 year', '6 months' ili '30 days'. Vrijednost: 1 week

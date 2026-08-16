@@ -20,6 +20,13 @@ $BuiltInDefaults = [PSCustomObject]@{
     MaxFilesPerRun   = $null
     ArchiveFolder    = "Arhiva"
     ArchivePath      = $null
+    ArchiveZipEnabled = $false
+    ArchiveZipAfter = $null
+    ArchiveZipGroupBy = "year"
+    RetentionEnabled = $false
+    RetentionYears = $null
+    RetentionAction = "delete"
+    SecondaryStorage = $null
     MaxLogSizeMB     = 10
     LogRotateCount   = 5
     TestMode         = $false
@@ -33,6 +40,7 @@ $RequiredScripts = @(
     "Archive.Logging.ps1"
     "Archive.Config.ps1"
     "Archive.Files.ps1"
+    "Archive.Maintenance.ps1"
     "Archive.Settings.ps1"
     "Archive.Run.ps1"
 )

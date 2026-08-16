@@ -1,0 +1,2 @@
+TEST RETENTION [RetentionDryRunSource]: action=delete
+status=would_run

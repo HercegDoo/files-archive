@@ -1,0 +1,22 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "../Archive",
+    "retention_enabled": true,
+    "retention_years": 7,
+    "retention_action": "move",
+    "secondary_storage": "Secondary",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "RetentionMoveSource",
+      "Path": "data/Source",
+      "Enabled": true
+    }
+  ]
+}

@@ -89,8 +89,14 @@ function Get-TreeManifest {
         Get-ChildItem -LiteralPath $Root -Recurse -File -Force |
             ForEach-Object {
                 $RelativePath = $_.FullName.Substring($Root.Length).TrimStart("\", "/").Replace("\", "/")
-                $Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
-                "FILE  $Hash  $RelativePath"
+
+                if ($_.Extension.ToLowerInvariant() -eq ".zip") {
+                    "ZIP   $RelativePath"
+                }
+                else {
+                    $Hash = (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+                    "FILE  $Hash  $RelativePath"
+                }
             }
     )
 
@@ -117,6 +123,39 @@ function Get-ExpectedExtraDirectoryManifest {
                 "DIR   $RelativePath/"
             }
     )
+}
+
+function Get-ExpectedZipManifest {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CaseRoot
+    )
+
+    $ExpectedZipsFile = Join-Path $CaseRoot "expected-zips.txt"
+
+    if (-not (Test-Path -LiteralPath $ExpectedZipsFile -PathType Leaf)) {
+        return @()
+    }
+
+    $Manifest = @(
+        Get-Content -LiteralPath $ExpectedZipsFile -Encoding UTF8 |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+            ForEach-Object {
+                $RelativePath = ([string]$_).Trim().Trim("\", "/").Replace("\", "/")
+                $ParentPath = Split-Path -Path $RelativePath -Parent
+                $Entries = @()
+
+                if (-not [string]::IsNullOrWhiteSpace($ParentPath)) {
+                    $Entries += "DIR   $($ParentPath.Replace("\", "/"))/"
+                }
+
+                $Entries += "ZIP   $RelativePath"
+
+                $Entries
+            }
+    )
+
+    return @($Manifest | Sort-Object -Unique)
 }
 
 function Get-ExpectedLines {
@@ -259,6 +298,78 @@ function Compare-ExactLogLines {
     return $Failures
 }
 
+function Test-ExpectedZipEntries {
+    param(
+        [Parameter(Mandatory)]
+        [string]$CaseRoot,
+
+        [Parameter(Mandatory)]
+        [string]$ActualDataRoot
+    )
+
+    $ExpectedZipEntriesFile = Join-Path $CaseRoot "expected-zip-entries.txt"
+    $Failures = @()
+
+    if (-not (Test-Path -LiteralPath $ExpectedZipEntriesFile -PathType Leaf)) {
+        return $Failures
+    }
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+
+    $ExpectedByZip = @{}
+
+    Get-Content -LiteralPath $ExpectedZipEntriesFile -Encoding UTF8 |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        ForEach-Object {
+            $Parts = ([string]$_).Split("|", 2)
+
+            if ($Parts.Count -ne 2) {
+                throw "Neispravan expected-zip-entries format: $_"
+            }
+
+            $ZipPath = $Parts[0].Trim().Trim("\", "/").Replace("\", "/")
+            $EntryPath = $Parts[1].Trim().Trim("\", "/").Replace("\", "/")
+
+            if (-not $ExpectedByZip.ContainsKey($ZipPath)) {
+                $ExpectedByZip[$ZipPath] = @()
+            }
+
+            $ExpectedByZip[$ZipPath] += $EntryPath
+        }
+
+    foreach ($ZipPath in $ExpectedByZip.Keys) {
+        $ActualZipPath = Join-Path $ActualDataRoot $ZipPath
+
+        if (-not (Test-Path -LiteralPath $ActualZipPath -PathType Leaf)) {
+            $Failures += "ZIP_MISSING $ZipPath"
+            continue
+        }
+
+        $Zip = [System.IO.Compression.ZipFile]::OpenRead($ActualZipPath)
+
+        try {
+            $ActualEntries = @($Zip.Entries | Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_.Name)
+            } | ForEach-Object {
+                $_.FullName.Replace("\", "/")
+            } | Sort-Object)
+        }
+        finally {
+            $Zip.Dispose()
+        }
+
+        $ExpectedEntries = @($ExpectedByZip[$ZipPath] | Sort-Object)
+        $EntryDiff = @(Compare-Object -ReferenceObject $ExpectedEntries -DifferenceObject $ActualEntries)
+
+        foreach ($Diff in $EntryDiff) {
+            $Prefix = if ($Diff.SideIndicator -eq "<=") { "ZIP_ENTRY_MISSING" } else { "ZIP_ENTRY_EXTRA" }
+            $Failures += "$Prefix $ZipPath|$($Diff.InputObject)"
+        }
+    }
+
+    return $Failures
+}
+
 function Get-ExpectedExitCode {
     param(
         [Parameter(Mandatory)]
@@ -386,6 +497,11 @@ function Invoke-TestCase {
         (Get-ExpectedExtraDirectoryManifest -CaseRoot $Case.FullName) |
             Sort-Object -Unique
     )
+    $ExpectedManifest = @(
+        $ExpectedManifest +
+        (Get-ExpectedZipManifest -CaseRoot $Case.FullName) |
+            Sort-Object -Unique
+    )
     Write-Lines -Path (Join-Path $CaseResult "actual-tree.txt") -Lines $ActualManifest
     Write-Lines -Path (Join-Path $CaseResult "expected-tree.txt") -Lines $ExpectedManifest
 
@@ -400,6 +516,7 @@ function Invoke-TestCase {
     }
 
     $Diff += Test-ExpectedLogAssertions -CaseRoot $Case.FullName -AppRoot $AppRoot -CaseResult $CaseResult
+    $Diff += Test-ExpectedZipEntries -CaseRoot $Case.FullName -ActualDataRoot $ActualData
 
     Write-Lines -Path (Join-Path $CaseResult "diff.txt") -Lines $Diff
 
