@@ -1,0 +1,21 @@
+{
+  "retention_enabled": true,
+  "retention_years": 7,
+  "retention_action": "delete",
+  "dry_run": true,
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "../Archive"
+  },
+  "Targets": [
+    {
+      "Name": "RetentionDryRunSource",
+      "Path": "data/Source",
+      "Enabled": true
+    }
+  ]
+}

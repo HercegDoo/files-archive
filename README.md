@@ -150,6 +150,13 @@ The FSRM task account must have read access to source folders and write access t
     "MaxDepth": null,
     "MaxFilesPerRun": 10000,
     "ArchiveFolder": "Arhiva",
+    "ArchiveZipEnabled": false,
+    "ArchiveZipAfter": "1 year",
+    "ArchiveZipGroupBy": "year",
+    "RetentionEnabled": false,
+    "RetentionYears": 7,
+    "RetentionAction": "delete",
+    "SecondaryStorage": "\\\\server\\long-term-archive",
     "TestMode": false
   },
   "Targets": [
@@ -189,6 +196,13 @@ The FSRM task account must have read access to source folders and write access t
 | `MaxFilesPerRun` | Optional maximum number of eligible files to process in one run. Default is `null`, which means unlimited. The alias `max_files_per_run` is also supported. Files are sorted by `CreationTime` ascending before the limit is applied, so the oldest files are processed first. |
 | `ArchiveFolder` | Archive folder or archive path. Can include `{year}` and `{month}`. |
 | `ArchivePath` | Optional explicit archive path. If set, it takes priority over `ArchiveFolder`. |
+| `ArchiveZipEnabled` | Enables automatic ZIP compression of old archive folders. Default: `false`. Alias: `archive_zip_enabled`. |
+| `ArchiveZipAfter` | Age threshold for ZIP compression, for example `"1 year"`, `"6 months"`, or `"30 days"`. Alias: `archive_zip_after`. |
+| `ArchiveZipGroupBy` | ZIP grouping mode: `year` or `month`. Alias: `archive_zip_group_by`. |
+| `RetentionEnabled` | Enables retention maintenance. Default: `false`. Alias: `retention_enabled`. |
+| `RetentionYears` | Number of years to keep archives on primary storage. Alias: `retention_years`. |
+| `RetentionAction` | Retention action: `delete` or `move`. Alias: `retention_action`. |
+| `SecondaryStorage` | Destination for `RetentionAction: "move"`. Alias: `secondary_storage`. |
 | `TestMode` | When `true`, logs what would happen without moving files. Aliases `DryRun` and `dry_run` are also supported. |
 | `Enabled` | Enables or disables one target. |
 
@@ -250,6 +264,93 @@ Skipped: 8
 Failed: 7
 Remaining backlog: 25000
 ```
+
+## Archive ZIP Compression
+
+ZIP compression is disabled by default. Enable it with:
+
+```json
+{
+  "Defaults": {
+    "ArchiveZipEnabled": true,
+    "ArchiveZipAfter": "1 year",
+    "ArchiveZipGroupBy": "year"
+  }
+}
+```
+
+Snake_case aliases are also supported:
+
+```json
+{
+  "archive_zip_enabled": true,
+  "archive_zip_after": "1 year",
+  "archive_zip_group_by": "month"
+}
+```
+
+Supported grouping modes:
+
+- `year`: compresses `Archive/2024/` into `Archive/2024.zip`. The ZIP keeps the month structure, for example `01/file.txt`.
+- `month`: compresses `Archive/2024/01/` into `Archive/2024/01.zip`.
+
+Safety behavior:
+
+- ZIP compression only runs when enabled.
+- Archive group age is checked from archived files' `CreationTime`.
+- A group is compressed only when all files in that group are older than the configured threshold.
+- Existing `.zip` archives are skipped, so repeated runs do not create duplicates.
+- The script creates and validates a temporary ZIP before removing the original folder.
+- If ZIP creation or validation fails, original files remain in place and the error is logged.
+- In `TestMode` / `dry_run`, ZIP actions are logged but not executed.
+
+## Retention Policy
+
+Retention is disabled by default. Enable it with:
+
+```json
+{
+  "Defaults": {
+    "RetentionEnabled": true,
+    "RetentionYears": 7,
+    "RetentionAction": "delete"
+  }
+}
+```
+
+Move old archives to secondary storage:
+
+```json
+{
+  "Defaults": {
+    "RetentionEnabled": true,
+    "RetentionYears": 7,
+    "RetentionAction": "move",
+    "SecondaryStorage": "\\\\server\\long-term-archive"
+  }
+}
+```
+
+Snake_case aliases are also supported:
+
+```json
+{
+  "retention_enabled": true,
+  "retention_years": 7,
+  "retention_action": "move",
+  "secondary_storage": "\\\\server\\long-term-archive"
+}
+```
+
+Retention scans year archives under the archive base path, including both folders such as `2018/` and ZIP files such as `2018.zip`.
+
+Safety behavior:
+
+- Newer archives remain untouched.
+- `delete` operations are logged with path, action, age, and status.
+- `move` copies to secondary storage, validates the copied content, and only then removes the original.
+- In `TestMode` / `dry_run`, retention actions are logged but not executed.
+- Failure on one archive is logged and does not cause uncontrolled processing of other archives.
 
 ## Archive Folder Templates
 
@@ -350,6 +451,8 @@ tests
         |-- expected-log-contains.txt
         |-- expected-log-exact.txt
         |-- expected-log-files.txt
+        |-- expected-zip-entries.txt
+        |-- expected-zips.txt
         `-- file-times.json
 ```
 
@@ -363,6 +466,8 @@ How it works:
 - `expected-log-contains.txt` is optional and lists text fragments that must appear in the active or rotated logs.
 - `expected-log-exact.txt` is optional and compares the active `FileArchive.log` line-by-line after removing timestamp prefixes. It supports `{APP_ROOT}` for the temporary application path.
 - `expected-log-files.txt` is optional and lists log files that must exist under `Logs`, for example `FileArchive.log.1.zip`.
+- `expected-zips.txt` is optional and lists expected ZIP files under `data`.
+- `expected-zip-entries.txt` is optional and lists expected ZIP entries as `zip-path|entry-path`.
 - `tests/test_results/<case-name>` is generated during the run and kept only when a test fails. It contains:
   - `actual/` with the real resulting `data` tree
   - `actual-tree.txt`
@@ -370,7 +475,7 @@ How it works:
   - `diff.txt`
   - script logs
 
-To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, optional expected empty directories in `expected-dirs.txt`, optional expected exit code in `expected-exit-code.txt`, optional log checks in `expected-log-contains.txt` / `expected-log-exact.txt` / `expected-log-files.txt`, and timestamp entries in `file-times.json`.
+To add a new test, create another folder under `tests/test_data`, add `input/config.json`, input files under `input/data`, expected files under `expected/data`, optional expected empty directories in `expected-dirs.txt`, optional expected exit code in `expected-exit-code.txt`, optional log checks in `expected-log-contains.txt` / `expected-log-exact.txt` / `expected-log-files.txt`, optional ZIP checks in `expected-zips.txt` / `expected-zip-entries.txt`, and timestamp entries in `file-times.json`.
 
 ## Notes
 

@@ -1,0 +1,3 @@
+RETENTION [RetentionDeleteSource]: action=delete
+2018.zip
+status=success
