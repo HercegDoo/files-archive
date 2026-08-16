@@ -1,0 +1,8 @@
+[
+  { "Path": "data/SourceA/old.txt", "LastWriteTime": "2024-02-11T10:20:30Z" },
+  { "Path": "data/SourceA/new.txt", "LastWriteTime": "2099-01-01T00:00:00Z" },
+  { "Path": "data/SourceA/old.bin", "LastWriteTime": "2024-02-11T10:20:30Z" },
+  { "Path": "data/SourceA/Nested/old-nested.pdf", "LastWriteTime": "2023-07-03T08:00:00Z" },
+  { "Path": "data/SourceA/Archive/1999/already-archived.txt", "LastWriteTime": "2022-01-01T00:00:00Z" },
+  { "Path": "data/SourceB/old-b.txt", "LastWriteTime": "2024-03-05T12:00:00Z" }
+]
