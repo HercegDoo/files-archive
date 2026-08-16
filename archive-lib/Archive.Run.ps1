@@ -93,6 +93,10 @@ function New-ArchiveTargetContext {
     Write-ArchiveLog "Datum za arhivu: $($Settings.DateField)" -LogFile $LogFile
     Write-ArchiveLog "Ekstenzije: $($Settings.Extensions -join ', ')" -LogFile $LogFile
     Write-ArchiveLog "Maksimalna dubina: $(if ($null -eq $Settings.MaxDepth) { 'neograniceno' } else { $Settings.MaxDepth })" -LogFile $LogFile
+    if (-not $Settings.DeleteEmptyFolders -or @($Settings.ProtectedEmptyFolders).Count -gt 0) {
+        Write-ArchiveLog "Brisanje praznih foldera: $($Settings.DeleteEmptyFolders)" -LogFile $LogFile
+        Write-ArchiveLog "Protected empty folders: $(if (@($Settings.ProtectedEmptyFolders).Count -eq 0) { '<none>' } else { @($Settings.ProtectedEmptyFolders) -join ', ' })" -LogFile $LogFile
+    }
     Write-ArchiveLog "TestMode: $($Settings.TestMode)" -LogFile $LogFile
 
     $FileSearchParams = @{
@@ -268,11 +272,31 @@ function Invoke-ArchiveRun {
     foreach ($Context in $Contexts) {
         if (
             $Context.Settings.Enabled -and
-            -not $Context.Settings.TestMode -and
-            $Context.Result.Moved -gt 0
+            -not $Context.Settings.TestMode
         ) {
-            $RemovedDirectories = Remove-EmptySourceDirectories -SourceRoot $Context.SourceRoot -ArchiveRoot $Context.ArchiveRoot
-            Write-ArchiveLog "Obrisano praznih foldera [$($Context.TargetName)]: $RemovedDirectories" -LogFile $LogFile
+            if (@($Context.Settings.ProtectedEmptyFolders).Count -gt 0) {
+                $CreatedProtectedDirectories = Ensure-ProtectedEmptyDirectoriesInArchive `
+                    -SourceRoot $Context.SourceRoot `
+                    -ArchiveRoot $Context.ArchiveRoot `
+                    -ProtectedPatterns @($Context.Settings.ProtectedEmptyFolders) `
+                    -Date (Get-Date)
+
+                Write-ArchiveLog "Kreirano protected empty folders u arhivi [$($Context.TargetName)]: $CreatedProtectedDirectories" -LogFile $LogFile
+            }
+
+            if ($Context.Result.Moved -gt 0) {
+                if ($Context.Settings.DeleteEmptyFolders) {
+                    $RemovedDirectories = Remove-EmptySourceDirectories `
+                        -SourceRoot $Context.SourceRoot `
+                        -ArchiveRoot $Context.ArchiveRoot `
+                        -ProtectedPatterns @($Context.Settings.ProtectedEmptyFolders)
+
+                    Write-ArchiveLog "Obrisano praznih foldera [$($Context.TargetName)]: $RemovedDirectories" -LogFile $LogFile
+                }
+                else {
+                    Write-ArchiveLog "Brisanje praznih foldera iskljuceno [$($Context.TargetName)]." -LogFile $LogFile
+                }
+            }
         }
     }
 

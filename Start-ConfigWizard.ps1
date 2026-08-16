@@ -163,6 +163,8 @@ function New-WizardConfig {
             Extensions = @(".txt", ".pdf", ".docx", ".bmp")
             MaxDepth = $null
             MaxFilesPerRun = $null
+            DeleteEmptyFolders = $true
+            ProtectedEmptyFolders = @()
             ArchiveFolder = "Arhiva"
             ArchiveZipEnabled = $false
             ArchiveZipAfter = "1 year"
@@ -365,6 +367,8 @@ function Edit-Defaults {
     )
 
     $Defaults = $Config.Defaults
+    $DefaultDeleteEmptyFolders = if ($Defaults.PSObject.Properties.Name -contains "DeleteEmptyFolders") { $Defaults.DeleteEmptyFolders } else { $true }
+    $DefaultProtectedEmptyFolders = if ($Defaults.PSObject.Properties.Name -contains "ProtectedEmptyFolders") { @($Defaults.ProtectedEmptyFolders) } else { @() }
 
     Set-ObjectProperty -Object $Defaults -Name "MaxLogSizeMB" -Value (ConvertTo-WizardNullableDouble (Read-WizardValue "MaxLogSizeMB" $Defaults.MaxLogSizeMB))
     Set-ObjectProperty -Object $Defaults -Name "LogRotateCount" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "LogRotateCount" $Defaults.LogRotateCount))
@@ -373,6 +377,8 @@ function Edit-Defaults {
     Set-ObjectProperty -Object $Defaults -Name "Extensions" -Value (ConvertTo-WizardStringArray (Read-WizardValue "Extensions comma-separated" ($Defaults.Extensions -join ",")))
     Set-ObjectProperty -Object $Defaults -Name "MaxDepth" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "MaxDepth empty=unlimited" $Defaults.MaxDepth))
     Set-ObjectProperty -Object $Defaults -Name "MaxFilesPerRun" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "MaxFilesPerRun empty=unlimited" $Defaults.MaxFilesPerRun))
+    Set-ObjectProperty -Object $Defaults -Name "DeleteEmptyFolders" -Value (ConvertTo-WizardBool (Read-WizardValue "DeleteEmptyFolders true/false" $DefaultDeleteEmptyFolders) $DefaultDeleteEmptyFolders)
+    Set-ObjectProperty -Object $Defaults -Name "ProtectedEmptyFolders" -Value (ConvertTo-WizardStringArray (Read-WizardValue "ProtectedEmptyFolders comma-separated" ($DefaultProtectedEmptyFolders -join ",")))
     Set-ObjectProperty -Object $Defaults -Name "ArchiveFolder" -Value ([string](Read-WizardValue "ArchiveFolder" $Defaults.ArchiveFolder))
     Set-ObjectProperty -Object $Defaults -Name "TestMode" -Value (ConvertTo-WizardBool (Read-WizardValue "TestMode true/false" $Defaults.TestMode) $Defaults.TestMode)
 
@@ -399,6 +405,8 @@ function Read-TargetValues {
     $ExistingOlderThanSeconds = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "OlderThanSeconds")) { $ExistingTarget.OlderThanSeconds } else { $null }
     $ExistingExtensions = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "Extensions")) { @($ExistingTarget.Extensions) -join "," } else { "" }
     $ExistingMaxDepth = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "MaxDepth")) { $ExistingTarget.MaxDepth } else { $null }
+    $ExistingDeleteEmptyFolders = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "DeleteEmptyFolders")) { $ExistingTarget.DeleteEmptyFolders } else { $null }
+    $ExistingProtectedEmptyFolders = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "ProtectedEmptyFolders")) { @($ExistingTarget.ProtectedEmptyFolders) -join "," } else { "" }
 
     $Target = [PSCustomObject]@{
         Name = [string](Read-WizardValue "Target name" $ExistingName)
@@ -424,6 +432,16 @@ function Read-TargetValues {
     $MaxDepth = ConvertTo-WizardNullableInt (Read-WizardValue "MaxDepth override empty=default" $ExistingMaxDepth)
     if ($null -ne $MaxDepth) {
         Set-ObjectProperty -Object $Target -Name "MaxDepth" -Value $MaxDepth
+    }
+
+    $DeleteEmptyFolders = Read-WizardValue "DeleteEmptyFolders override true/false empty=default" $ExistingDeleteEmptyFolders
+    if ($null -ne $DeleteEmptyFolders -and -not [string]::IsNullOrWhiteSpace([string]$DeleteEmptyFolders)) {
+        Set-ObjectProperty -Object $Target -Name "DeleteEmptyFolders" -Value (ConvertTo-WizardBool $DeleteEmptyFolders $true)
+    }
+
+    $ProtectedEmptyFolders = @(ConvertTo-WizardStringArray (Read-WizardValue "ProtectedEmptyFolders override comma-separated empty=default" $ExistingProtectedEmptyFolders))
+    if ($ProtectedEmptyFolders.Count -gt 0) {
+        Set-ObjectProperty -Object $Target -Name "ProtectedEmptyFolders" -Value $ProtectedEmptyFolders
     }
 
     return $Target

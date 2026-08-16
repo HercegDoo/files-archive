@@ -1,0 +1,3 @@
+Protected empty folders: keep/**, keep, cache/**, !cache/tmp
+Kreirano protected empty folders u arhivi [ProtectedSource]: 2
+Obrisano praznih foldera [ProtectedSource]: 2

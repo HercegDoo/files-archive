@@ -230,6 +230,192 @@ function Get-SourceFiles {
     )
 }
 
+function Get-RelativeArchivePath {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path,
+
+        [Parameter(Mandatory)]
+        [string]$Root
+    )
+
+    return [System.IO.Path]::GetFullPath($Path).Substring(
+        (Get-NormalizedDirectoryPath -Path $Root).Length
+    ).TrimStart("\", "/").Replace("\", "/")
+}
+
+function ConvertTo-ArchiveGlobRegex {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Pattern
+    )
+
+    $NormalizedPattern = $Pattern.Trim().Replace("\", "/").TrimStart("/")
+    $NormalizedPattern = $NormalizedPattern.TrimEnd("/")
+    $ContainsSlash = $NormalizedPattern.Contains("/")
+    $EscapedPattern = [regex]::Escape($NormalizedPattern)
+    $EscapedPattern = $EscapedPattern.Replace("\*\*", ".*")
+    $EscapedPattern = $EscapedPattern.Replace("\*", "[^/]*")
+    $EscapedPattern = $EscapedPattern.Replace("\?", "[^/]")
+
+    if ($ContainsSlash) {
+        return "^$EscapedPattern$"
+    }
+
+    return "(^|.*/)$EscapedPattern$"
+}
+
+function Test-ArchiveRelativePathPattern {
+    param(
+        [Parameter(Mandatory)]
+        [string]$RelativePath,
+
+        [Parameter(Mandatory)]
+        [string]$Pattern
+    )
+
+    $NormalizedPattern = $Pattern.Trim()
+
+    if (
+        [string]::IsNullOrWhiteSpace($NormalizedPattern) -or
+        $NormalizedPattern.StartsWith("#")
+    ) {
+        return $false
+    }
+
+    if ($NormalizedPattern.StartsWith("!")) {
+        $NormalizedPattern = $NormalizedPattern.Substring(1)
+    }
+
+    if ([string]::IsNullOrWhiteSpace($NormalizedPattern)) {
+        return $false
+    }
+
+    $NormalizedRelativePath = $RelativePath.Replace("\", "/").Trim("/")
+    $Regex = ConvertTo-ArchiveGlobRegex -Pattern $NormalizedPattern
+
+    return $NormalizedRelativePath -match $Regex
+}
+
+function Test-ProtectedEmptyDirectory {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Directory,
+
+        [Parameter(Mandatory)]
+        [string]$SourceRoot,
+
+        [AllowEmptyCollection()]
+        [string[]]$ProtectedPatterns
+    )
+
+    $RelativePath = Get-RelativeArchivePath -Path $Directory -Root $SourceRoot
+
+    if ([string]::IsNullOrWhiteSpace($RelativePath)) {
+        return $false
+    }
+
+    $Protected = $false
+
+    foreach ($Pattern in @($ProtectedPatterns)) {
+        if ([string]::IsNullOrWhiteSpace([string]$Pattern)) {
+            continue
+        }
+
+        $PatternText = ([string]$Pattern).Trim()
+        $IsNegated = $PatternText.StartsWith("!")
+
+        if (Test-ArchiveRelativePathPattern -RelativePath $RelativePath -Pattern $PatternText) {
+            $Protected = -not $IsNegated
+        }
+    }
+
+    return $Protected
+}
+
+function Test-DirectoryIsEmpty {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+
+    return @(Get-ChildItem -LiteralPath $Path -Force).Count -eq 0
+}
+
+function Get-ArchiveDirectoryForRelativeDirectory {
+    param(
+        [Parameter(Mandatory)]
+        [string]$ArchiveRoot,
+
+        [Parameter(Mandatory)]
+        [string]$RelativeDirectory,
+
+        [Parameter(Mandatory)]
+        [datetime]$Date
+    )
+
+    $ExpandedArchiveRoot = Expand-ArchivePathTemplate -Path $ArchiveRoot -Date $Date
+
+    $DestinationDirectory = $ExpandedArchiveRoot
+
+    if (-not [string]::IsNullOrWhiteSpace($RelativeDirectory)) {
+        $DestinationDirectory = Join-Path $DestinationDirectory $RelativeDirectory
+    }
+
+    return $DestinationDirectory
+}
+
+function Ensure-ProtectedEmptyDirectoriesInArchive {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SourceRoot,
+
+        [Parameter(Mandatory)]
+        [string]$ArchiveRoot,
+
+        [AllowEmptyCollection()]
+        [string[]]$ProtectedPatterns,
+
+        [Parameter(Mandatory)]
+        [datetime]$Date
+    )
+
+    if (@($ProtectedPatterns).Count -eq 0) {
+        return 0
+    }
+
+    $Created = 0
+
+    $Directories = @(
+        Get-ChildItem -LiteralPath $SourceRoot -Directory -Recurse -Force |
+            Sort-Object FullName
+    )
+
+    foreach ($Directory in $Directories) {
+        if (Test-IsInsideArchive -Path $Directory.FullName -ArchiveRoot $ArchiveRoot) {
+            continue
+        }
+
+        if (-not (Test-DirectoryIsEmpty -Path $Directory.FullName)) {
+            continue
+        }
+
+        if (-not (Test-ProtectedEmptyDirectory -Directory $Directory.FullName -SourceRoot $SourceRoot -ProtectedPatterns $ProtectedPatterns)) {
+            continue
+        }
+
+        $RelativePath = Get-RelativeArchivePath -Path $Directory.FullName -Root $SourceRoot
+        $ArchiveDirectory = Get-ArchiveDirectoryForRelativeDirectory -ArchiveRoot $ArchiveRoot -RelativeDirectory $RelativePath -Date $Date
+
+        if (-not (Test-Path -LiteralPath $ArchiveDirectory -PathType Container)) {
+            New-Item -ItemType Directory -Path $ArchiveDirectory -Force | Out-Null
+            $Created++
+        }
+    }
+
+    return $Created
+}
+
 function Get-ArchivableFiles {
     param(
         [Parameter(Mandatory)]
@@ -280,7 +466,10 @@ function Remove-EmptySourceDirectories {
         [string]$SourceRoot,
 
         [Parameter(Mandatory)]
-        [string]$ArchiveRoot
+        [string]$ArchiveRoot,
+
+        [AllowEmptyCollection()]
+        [string[]]$ProtectedPatterns = @()
     )
 
     $Removed = 0
@@ -296,6 +485,10 @@ function Remove-EmptySourceDirectories {
         }
 
         if (@(Get-ChildItem -LiteralPath $Directory.FullName -Force).Count -gt 0) {
+            continue
+        }
+
+        if (Test-ProtectedEmptyDirectory -Directory $Directory.FullName -SourceRoot $SourceRoot -ProtectedPatterns $ProtectedPatterns) {
             continue
         }
 

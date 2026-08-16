@@ -1,0 +1,6 @@
+Source/keep/
+Source/keep/delete-me/
+Source/keep/always/
+Source/Archive/keep/
+Source/Archive/keep/delete-me/
+Source/Archive/keep/always/

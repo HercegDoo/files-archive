@@ -68,6 +68,32 @@ function Set-TestFileTimes {
     }
 }
 
+function New-TestInputDirectories {
+    param(
+        [Parameter(Mandatory)]
+        [string]$AppRoot,
+
+        [Parameter(Mandatory)]
+        [string]$InputDirsFile
+    )
+
+    if (-not (Test-Path -LiteralPath $InputDirsFile -PathType Leaf)) {
+        return
+    }
+
+    Get-Content -LiteralPath $InputDirsFile -Encoding UTF8 |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        ForEach-Object {
+            $RelativePath = ([string]$_).Trim().Trim("\", "/")
+
+            if ([string]::IsNullOrWhiteSpace($RelativePath) -or $RelativePath.StartsWith("#")) {
+                return
+            }
+
+            New-Item -ItemType Directory -Path (Join-Path $AppRoot $RelativePath) -Force | Out-Null
+        }
+}
+
 function Get-TreeManifest {
     param(
         [Parameter(Mandatory)]
@@ -458,6 +484,7 @@ function Invoke-TestCase {
     $CaseInput = Join-Path $Case.FullName "input"
     $CaseExpected = Join-Path $Case.FullName "expected/data"
     $CaseTimes = Join-Path $Case.FullName "file-times.json"
+    $CaseInputDirs = Join-Path $Case.FullName "input-dirs.txt"
     $ExpectedExitCode = Get-ExpectedExitCode -CaseRoot $Case.FullName
     $CaseResult = Join-Path $ResultsRoot $CaseName
     $AppRoot = Join-Path (Join-Path $ScratchRoot $CaseName) "app"
@@ -476,6 +503,7 @@ function Invoke-TestCase {
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "Start-FileArchive.ps1") -Destination $AppRoot -Force
     Copy-Item -LiteralPath (Join-Path $ProjectRoot "archive-lib") -Destination $AppRoot -Recurse -Force
     Copy-DirectoryContent -Source $CaseInput -Destination $AppRoot
+    New-TestInputDirectories -AppRoot $AppRoot -InputDirsFile $CaseInputDirs
     Set-TestFileTimes -AppRoot $AppRoot -TimesFile $CaseTimes
 
     $RunOutputPath = Join-Path $CaseResult "run-output.log"

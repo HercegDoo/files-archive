@@ -18,6 +18,8 @@ function New-ArchiveSettings {
     $Properties.Extensions = @(".txt")
     $Properties.MaxDepth = $null
     $Properties.MaxFilesPerRun = $null
+    $Properties.DeleteEmptyFolders = $true
+    $Properties.ProtectedEmptyFolders = @()
     $Properties.ArchiveFolder = "Arhiva"
     $Properties.ArchivePath = $null
     $Properties.ArchiveZipEnabled = $false
@@ -100,6 +102,36 @@ function ConvertTo-ArchivePositiveNumber {
     }
 
     return $Number
+}
+
+function ConvertTo-ArchiveStringArray {
+    param(
+        [AllowNull()]
+        [object]$Value
+    )
+
+    if ($null -eq $Value) {
+        return @()
+    }
+
+    if ($Value -is [string]) {
+        if ([string]::IsNullOrWhiteSpace($Value)) {
+            return @()
+        }
+
+        return @(
+            $Value.Split(",", [System.StringSplitOptions]::RemoveEmptyEntries) |
+                ForEach-Object { $_.Trim() } |
+                Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        )
+    }
+
+    return @(
+        @($Value) |
+            ForEach-Object { [string]$_ } |
+            ForEach-Object { $_.Trim() } |
+            Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+    )
 }
 
 function ConvertTo-ArchiveZipGroupBy {
@@ -197,6 +229,26 @@ function Update-ArchiveSettings {
 
     if (Test-ConfigProperty $Source "MaxFilesPerRun") {
         $Settings.MaxFilesPerRun = ConvertTo-ArchiveMaxFilesPerRun -Value $Source.MaxFilesPerRun -PropertyName "MaxFilesPerRun"
+    }
+
+    if (Test-ConfigProperty $Source "delete_empty_folders") {
+        $Settings.DeleteEmptyFolders = [bool]$Source.delete_empty_folders
+    }
+
+    if (Test-ConfigProperty $Source "DeleteEmptyFolders") {
+        $Settings.DeleteEmptyFolders = [bool]$Source.DeleteEmptyFolders
+    }
+
+    if (Test-ConfigProperty $Source "CleanupEmptyFolders") {
+        $Settings.DeleteEmptyFolders = [bool]$Source.CleanupEmptyFolders
+    }
+
+    if (Test-ConfigProperty $Source "ProtectedEmptyFolders") {
+        $Settings.ProtectedEmptyFolders = @(ConvertTo-ArchiveStringArray -Value $Source.ProtectedEmptyFolders)
+    }
+
+    if (Test-ConfigProperty $Source "protected_empty_folders") {
+        $Settings.ProtectedEmptyFolders = @(ConvertTo-ArchiveStringArray -Value $Source.protected_empty_folders)
     }
 
     if (Test-ConfigProperty $Source "ArchiveFolder") {
