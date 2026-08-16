@@ -17,6 +17,7 @@ function New-ArchiveSettings {
     $Properties.DateField = "LastWriteTime"
     $Properties.Extensions = @(".txt")
     $Properties.MaxDepth = $null
+    $Properties.MaxFilesPerRun = $null
     $Properties.ArchiveFolder = "Arhiva"
     $Properties.ArchivePath = $null
     $Properties.MaxLogSizeMB = 10
@@ -48,6 +49,28 @@ function ConvertTo-ArchiveMaxDepth {
     }
 
     return [int]$Depth
+}
+
+function ConvertTo-ArchiveMaxFilesPerRun {
+    param(
+        [AllowNull()]
+        [object]$Value,
+
+        [Parameter(Mandatory)]
+        [string]$PropertyName
+    )
+
+    if ($null -eq $Value -or [string]::IsNullOrWhiteSpace([string]$Value)) {
+        return $null
+    }
+
+    $Limit = [double]$Value
+
+    if ($Limit -lt 1 -or $Limit -ne [math]::Floor($Limit)) {
+        throw "$PropertyName mora biti cijeli broj veci ili jednak 1."
+    }
+
+    return [int]$Limit
 }
 
 function Update-ArchiveSettings {
@@ -109,6 +132,14 @@ function Update-ArchiveSettings {
         $Settings.MaxDepth = ConvertTo-ArchiveMaxDepth -Value $Source.MaxDepth -PropertyName "MaxDepth"
     }
 
+    if (Test-ConfigProperty $Source "max_files_per_run") {
+        $Settings.MaxFilesPerRun = ConvertTo-ArchiveMaxFilesPerRun -Value $Source.max_files_per_run -PropertyName "max_files_per_run"
+    }
+
+    if (Test-ConfigProperty $Source "MaxFilesPerRun") {
+        $Settings.MaxFilesPerRun = ConvertTo-ArchiveMaxFilesPerRun -Value $Source.MaxFilesPerRun -PropertyName "MaxFilesPerRun"
+    }
+
     if (Test-ConfigProperty $Source "ArchiveFolder") {
         $Settings.ArchiveFolder = [string]$Source.ArchiveFolder
     }
@@ -134,6 +165,14 @@ function Update-ArchiveSettings {
         $Settings.TestMode = [bool]$Source.TestMode
     }
 
+    if (Test-ConfigProperty $Source "DryRun") {
+        $Settings.TestMode = [bool]$Source.DryRun
+    }
+
+    if (Test-ConfigProperty $Source "dry_run") {
+        $Settings.TestMode = [bool]$Source.dry_run
+    }
+
     return $Settings
 }
 
@@ -147,6 +186,7 @@ function Get-DefaultSettings {
     )
 
     $Settings = New-ArchiveSettings -Source $BuiltInDefaults
+    $Settings = Update-ArchiveSettings -Settings $Settings -Source $Config
 
     if (-not (Test-ConfigProperty $Config "Defaults")) {
         return $Settings

@@ -1,0 +1,7 @@
+Files eligible for archive: 2
+Files selected: 2
+GRESKA [BlockedSource]
+PREMJESTEN [GoodSource]
+Premjesteno: 1
+Greske: 1
+Failed: 1

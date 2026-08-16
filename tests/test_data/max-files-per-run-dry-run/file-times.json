@@ -1,0 +1,5 @@
+[
+  { "Path": "data/DryLimitedSource/file-2019.txt", "CreationTime": "2019-01-01T00:00:00Z" },
+  { "Path": "data/DryLimitedSource/file-2020.txt", "CreationTime": "2020-01-01T00:00:00Z" },
+  { "Path": "data/DryLimitedSource/file-2021.txt", "CreationTime": "2021-01-01T00:00:00Z" }
+]

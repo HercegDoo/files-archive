@@ -1,6 +1,7 @@
 function New-ArchiveResult {
     param(
         [int]$Found = 0,
+        [int]$Selected = 0,
         [int]$Moved = 0,
         [int]$Tested = 0,
         [int]$Skipped = 0,
@@ -8,11 +9,12 @@ function New-ArchiveResult {
     )
 
     return [PSCustomObject]@{
-        Found   = $Found
-        Moved   = $Moved
-        Tested  = $Tested
-        Skipped = $Skipped
-        Errors  = $Errors
+        Found    = $Found
+        Selected = $Selected
+        Moved    = $Moved
+        Tested   = $Tested
+        Skipped  = $Skipped
+        Errors   = $Errors
     }
 }
 
@@ -26,6 +28,7 @@ function Add-ArchiveResult {
     )
 
     $Target.Found += $Source.Found
+    $Target.Selected += $Source.Selected
     $Target.Moved += $Source.Moved
     $Target.Tested += $Source.Tested
     $Target.Skipped += $Source.Skipped
@@ -48,7 +51,7 @@ function Get-ArchiveRoot {
     return Resolve-ArchivePath -Path $Settings.ArchiveFolder -BaseDirectory $SourceRoot
 }
 
-function Invoke-TargetArchive {
+function New-ArchiveTargetContext {
     param(
         [Parameter(Mandatory)]
         [object]$TargetConfig,
@@ -62,10 +65,21 @@ function Invoke-TargetArchive {
 
     $TargetName = Get-ArchiveTargetName -Target $TargetConfig
     $SourceRoot = [string]$TargetConfig.Path
+    $Result = New-ArchiveResult
 
     if (-not $Settings.Enabled) {
         Write-ArchiveLog "PRESKOCEN [$TargetName]: Enabled je false." -LogFile $LogFile
-        return New-ArchiveResult -Skipped 1
+        $Result.Skipped = 1
+
+        return [PSCustomObject]@{
+            TargetConfig = $TargetConfig
+            Settings     = $Settings
+            TargetName   = $TargetName
+            SourceRoot   = $SourceRoot
+            ArchiveRoot  = $null
+            Result       = $Result
+            Candidates   = @()
+        }
     }
 
     $ArchiveRoot = Get-ArchiveRoot -SourceRoot $SourceRoot -Settings $Settings
@@ -91,49 +105,105 @@ function Invoke-TargetArchive {
     }
 
     $Files = @(Get-ArchivableFiles @FileSearchParams)
-
-    $Result = New-ArchiveResult -Found $Files.Count
+    $Result.Found = $Files.Count
 
     Write-ArchiveLog "Pronadjeno fajlova: $($Files.Count)" -LogFile $LogFile
 
-    foreach ($File in $Files) {
-        try {
-            $DestinationParams = @{
+    $Candidates = @(
+        foreach ($File in $Files) {
+            [PSCustomObject]@{
                 File        = $File
-                SourceRoot  = $SourceRoot
-                ArchiveRoot = $ArchiveRoot
-                DateField   = $Settings.DateField
+                Context     = $null
+                CreatedAt   = $File.CreationTimeUtc
+                FullName    = $File.FullName
             }
-
-            $Destination = Get-DestinationPath @DestinationParams
-
-            if ($Settings.TestMode) {
-                Write-ArchiveLog "TEST [$TargetName]: '$($File.FullName)' -> '$($Destination.File)'" -LogFile $LogFile
-                $Result.Tested++
-                continue
-            }
-
-            if (-not (Test-Path -LiteralPath $Destination.Directory -PathType Container)) {
-                New-Item -ItemType Directory -Path $Destination.Directory -Force | Out-Null
-            }
-
-            Move-Item -LiteralPath $File.FullName -Destination $Destination.File
-            Write-ArchiveLog "PREMJESTEN [$TargetName]: '$($File.FullName)' -> '$($Destination.File)'" -LogFile $LogFile
-
-            $Result.Moved++
         }
-        catch {
-            Write-ArchiveLog "GRESKA [$TargetName]: '$($File.FullName)' - $($_.Exception.Message)" -LogFile $LogFile
-            $Result.Errors++
-        }
+    )
+
+    $Context = [PSCustomObject]@{
+        TargetConfig = $TargetConfig
+        Settings     = $Settings
+        TargetName   = $TargetName
+        SourceRoot   = $SourceRoot
+        ArchiveRoot  = $ArchiveRoot
+        Result       = $Result
+        Candidates   = $Candidates
     }
 
-    if (-not $Settings.TestMode -and $Result.Moved -gt 0) {
-        $RemovedDirectories = Remove-EmptySourceDirectories -SourceRoot $SourceRoot -ArchiveRoot $ArchiveRoot
-        Write-ArchiveLog "Obrisano praznih foldera: $RemovedDirectories" -LogFile $LogFile
+    foreach ($Candidate in $Context.Candidates) {
+        $Candidate.Context = $Context
     }
 
-    return $Result
+    return $Context
+}
+
+function Select-ArchiveCandidates {
+    param(
+        [Parameter(Mandatory)]
+        [AllowEmptyCollection()]
+        [object[]]$Candidates,
+
+        [AllowNull()]
+        [object]$MaxFilesPerRun
+    )
+
+    $SortedCandidates = @(
+        $Candidates |
+            Sort-Object `
+                @{ Expression = { $_.CreatedAt } }, `
+                @{ Expression = { $_.FullName } }
+    )
+
+    if ($null -eq $MaxFilesPerRun) {
+        return $SortedCandidates
+    }
+
+    return @($SortedCandidates | Select-Object -First ([int]$MaxFilesPerRun))
+}
+
+function Invoke-ArchiveCandidate {
+    param(
+        [Parameter(Mandatory)]
+        [object]$Candidate,
+
+        [Parameter(Mandatory)]
+        [string]$LogFile
+    )
+
+    $Context = $Candidate.Context
+    $File = $Candidate.File
+    $Settings = $Context.Settings
+    $TargetName = $Context.TargetName
+
+    try {
+        $DestinationParams = @{
+            File        = $File
+            SourceRoot  = $Context.SourceRoot
+            ArchiveRoot = $Context.ArchiveRoot
+            DateField   = $Settings.DateField
+        }
+
+        $Destination = Get-DestinationPath @DestinationParams
+
+        if ($Settings.TestMode) {
+            Write-ArchiveLog "TEST [$TargetName]: '$($File.FullName)' -> '$($Destination.File)'" -LogFile $LogFile
+            $Context.Result.Tested++
+            return
+        }
+
+        if (-not (Test-Path -LiteralPath $Destination.Directory -PathType Container)) {
+            New-Item -ItemType Directory -Path $Destination.Directory -Force | Out-Null
+        }
+
+        Move-Item -LiteralPath $File.FullName -Destination $Destination.File
+        Write-ArchiveLog "PREMJESTEN [$TargetName]: '$($File.FullName)' -> '$($Destination.File)'" -LogFile $LogFile
+
+        $Context.Result.Moved++
+    }
+    catch {
+        Write-ArchiveLog "GRESKA [$TargetName]: '$($File.FullName)' - $($_.Exception.Message)" -LogFile $LogFile
+        $Context.Result.Errors++
+    }
 }
 
 function Invoke-ArchiveRun {
@@ -159,31 +229,75 @@ function Invoke-ArchiveRun {
     Write-ArchiveLog "Broj ciljnih putanja: $($ArchiveTargets.Count)" -LogFile $LogFile
     Write-ArchiveLog "Limit log fajla: $($Defaults.MaxLogSizeMB) MB" -LogFile $LogFile
     Write-ArchiveLog "Broj rotiranih logova: $($Defaults.LogRotateCount)" -LogFile $LogFile
+    Write-ArchiveLog "Max files per run: $(if ($null -eq $Defaults.MaxFilesPerRun) { 'neograniceno' } else { $Defaults.MaxFilesPerRun })" -LogFile $LogFile
     Write-ArchiveLog "============================================================" -LogFile $LogFile
 
-    $Totals = New-ArchiveResult
+    $Contexts = @()
+    $AllCandidates = @()
 
     foreach ($ArchiveTarget in $ArchiveTargets) {
         $Settings = Get-TargetSettings -TargetConfig $ArchiveTarget -Defaults $Defaults
 
-        $ArchiveParams = @{
+        $ContextParams = @{
             TargetConfig = $ArchiveTarget
             Settings     = $Settings
             LogFile      = $LogFile
         }
 
-        $Result = Invoke-TargetArchive @ArchiveParams
+        $Context = New-ArchiveTargetContext @ContextParams
+        $Contexts += $Context
+        $AllCandidates += @($Context.Candidates)
+    }
 
-        Add-ArchiveResult -Target $Totals -Source $Result
+    $SelectedCandidates = @(Select-ArchiveCandidates -Candidates $AllCandidates -MaxFilesPerRun $Defaults.MaxFilesPerRun)
+    $RemainingFiles = $AllCandidates.Count - $SelectedCandidates.Count
+
+    foreach ($Candidate in $SelectedCandidates) {
+        $Candidate.Context.Result.Selected++
+    }
+
+    Write-ArchiveLog "Files eligible for archive: $($AllCandidates.Count)" -LogFile $LogFile
+    Write-ArchiveLog "Max files per run: $(if ($null -eq $Defaults.MaxFilesPerRun) { 'neograniceno' } else { $Defaults.MaxFilesPerRun })" -LogFile $LogFile
+    Write-ArchiveLog "Files selected: $($SelectedCandidates.Count)" -LogFile $LogFile
+    Write-ArchiveLog "Files remaining: $RemainingFiles" -LogFile $LogFile
+
+    foreach ($Candidate in $SelectedCandidates) {
+        Invoke-ArchiveCandidate -Candidate $Candidate -LogFile $LogFile
+    }
+
+    foreach ($Context in $Contexts) {
+        if (
+            $Context.Settings.Enabled -and
+            -not $Context.Settings.TestMode -and
+            $Context.Result.Moved -gt 0
+        ) {
+            $RemovedDirectories = Remove-EmptySourceDirectories -SourceRoot $Context.SourceRoot -ArchiveRoot $Context.ArchiveRoot
+            Write-ArchiveLog "Obrisano praznih foldera [$($Context.TargetName)]: $RemovedDirectories" -LogFile $LogFile
+        }
+    }
+
+    $Totals = New-ArchiveResult
+
+    foreach ($Context in $Contexts) {
+        Add-ArchiveResult -Target $Totals -Source $Context.Result
     }
 
     Write-ArchiveLog "============================================================" -LogFile $LogFile
     Write-ArchiveLog "Arhiviranje zavrseno" -LogFile $LogFile
     Write-ArchiveLog "Pronadjeno: $($Totals.Found)" -LogFile $LogFile
+    Write-ArchiveLog "Odabrano: $($Totals.Selected)" -LogFile $LogFile
     Write-ArchiveLog "Premjesteno: $($Totals.Moved)" -LogFile $LogFile
     Write-ArchiveLog "Testirano: $($Totals.Tested)" -LogFile $LogFile
     Write-ArchiveLog "Preskoceno: $($Totals.Skipped)" -LogFile $LogFile
     Write-ArchiveLog "Greske: $($Totals.Errors)" -LogFile $LogFile
+    Write-ArchiveLog "Preostalo: $RemainingFiles" -LogFile $LogFile
+    Write-ArchiveLog "===== ARCHIVE RUN SUMMARY =====" -LogFile $LogFile
+    Write-ArchiveLog "Eligible files: $($Totals.Found)" -LogFile $LogFile
+    Write-ArchiveLog "Selected files: $($Totals.Selected)" -LogFile $LogFile
+    Write-ArchiveLog "Successfully archived: $($Totals.Moved)" -LogFile $LogFile
+    Write-ArchiveLog "Skipped: $($Totals.Skipped)" -LogFile $LogFile
+    Write-ArchiveLog "Failed: $($Totals.Errors)" -LogFile $LogFile
+    Write-ArchiveLog "Remaining backlog: $RemainingFiles" -LogFile $LogFile
     Write-ArchiveLog "============================================================" -LogFile $LogFile
 
     return $Totals

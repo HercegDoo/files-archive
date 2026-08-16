@@ -1,0 +1,5 @@
+[
+  { "Path": "data/AllSource/file-a.txt", "CreationTime": "2020-01-01T00:00:00Z" },
+  { "Path": "data/AllSource/file-b.txt", "CreationTime": "2020-01-02T00:00:00Z" },
+  { "Path": "data/AllSource/file-c.txt", "CreationTime": "2020-01-03T00:00:00Z" }
+]

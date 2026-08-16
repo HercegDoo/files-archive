@@ -1,0 +1,19 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "MaxFilesPerRun": 10,
+    "ArchiveFolder": "Archive/{year}",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "AllSource",
+      "Path": "data/AllSource",
+      "Enabled": true
+    }
+  ]
+}

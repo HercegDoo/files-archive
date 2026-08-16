@@ -3,6 +3,7 @@ Pokretanje arhiviranja
 Broj ciljnih putanja: 1
 Limit log fajla: 5 MB
 Broj rotiranih logova: 2
+Max files per run: neograniceno
 ============================================================
 ------------------------------------------------------------
 CILJ: LogSource
@@ -14,13 +15,26 @@ Ekstenzije: .txt
 Maksimalna dubina: neograniceno
 TestMode: False
 Pronadjeno fajlova: 1
+Files eligible for archive: 1
+Max files per run: neograniceno
+Files selected: 1
+Files remaining: 0
 PREMJESTEN [LogSource]: '{APP_ROOT}/data/LogSource/logged-file.txt' -> '{APP_ROOT}/data/LogSource/Archive/2020/logged-file.txt'
-Obrisano praznih foldera: 0
+Obrisano praznih foldera [LogSource]: 0
 ============================================================
 Arhiviranje zavrseno
 Pronadjeno: 1
+Odabrano: 1
 Premjesteno: 1
 Testirano: 0
 Preskoceno: 0
 Greske: 0
+Preostalo: 0
+===== ARCHIVE RUN SUMMARY =====
+Eligible files: 1
+Selected files: 1
+Successfully archived: 1
+Skipped: 0
+Failed: 0
+Remaining backlog: 0
 ============================================================

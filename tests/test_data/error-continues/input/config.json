@@ -1,0 +1,24 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive",
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "BlockedSource",
+      "Path": "data/BlockedSource",
+      "ArchiveFolder": "ArchiveBlocker",
+      "Enabled": true
+    },
+    {
+      "Name": "GoodSource",
+      "Path": "data/GoodSource",
+      "Enabled": true
+    }
+  ]
+}
