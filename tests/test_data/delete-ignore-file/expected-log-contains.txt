@@ -1,0 +1,5 @@
+Ignore file:
+2 pravila
+Pronadjeno fajlova: 1
+OBRISAN [IgnoreDeleteSource]:
+Obrisano fajlova: 1

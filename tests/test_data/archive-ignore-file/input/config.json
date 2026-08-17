@@ -1,0 +1,22 @@
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt", ".bak", ".archiveignore"],
+    "FileAction": "archive",
+    "ArchiveFolder": "Archive",
+    "IgnoreFileEnabled": true,
+    "IgnoreFile": ".archiveignore",
+    "DeleteEmptyFolders": true,
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "IgnoreArchiveSource",
+      "Path": "data/Source",
+      "Enabled": true
+    }
+  ]
+}

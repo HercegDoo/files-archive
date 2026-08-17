@@ -6,6 +6,8 @@
     "DateField": "CreationTime",
     "Extensions": [".txt", ".pdf"],
     "FileAction": "archive",
+    "IgnoreFileEnabled": true,
+    "IgnoreFile": ".archiveignore",
     "MaxDepth": 3,
     "MaxFilesPerRun": 100,
     "DeleteEmptyFolders": true,
@@ -29,6 +31,8 @@
       "OlderThanSeconds": 120.0,
       "Extensions": [".txt"],
       "FileAction": "archive",
+      "IgnoreFileEnabled": true,
+      "IgnoreFile": ".editedignore",
       "MaxDepth": 1,
       "DeleteEmptyFolders": true,
       "ProtectedEmptyFolders": ["keep-edited"]

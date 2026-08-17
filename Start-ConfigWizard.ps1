@@ -162,6 +162,8 @@ function New-WizardConfig {
             DateField = "LastWriteTime"
             Extensions = @(".txt", ".pdf", ".docx", ".bmp")
             FileAction = "archive"
+            IgnoreFileEnabled = $true
+            IgnoreFile = ".archiveignore"
             MaxDepth = $null
             MaxFilesPerRun = $null
             DeleteEmptyFolders = $true
@@ -371,6 +373,8 @@ function Edit-Defaults {
     $DefaultDeleteEmptyFolders = if ($Defaults.PSObject.Properties.Name -contains "DeleteEmptyFolders") { $Defaults.DeleteEmptyFolders } else { $true }
     $DefaultProtectedEmptyFolders = if ($Defaults.PSObject.Properties.Name -contains "ProtectedEmptyFolders") { @($Defaults.ProtectedEmptyFolders) } else { @() }
     $DefaultFileAction = if ($Defaults.PSObject.Properties.Name -contains "FileAction") { $Defaults.FileAction } else { "archive" }
+    $DefaultIgnoreFileEnabled = if ($Defaults.PSObject.Properties.Name -contains "IgnoreFileEnabled") { $Defaults.IgnoreFileEnabled } else { $true }
+    $DefaultIgnoreFile = if ($Defaults.PSObject.Properties.Name -contains "IgnoreFile") { $Defaults.IgnoreFile } else { ".archiveignore" }
 
     Set-ObjectProperty -Object $Defaults -Name "MaxLogSizeMB" -Value (ConvertTo-WizardNullableDouble (Read-WizardValue "MaxLogSizeMB" $Defaults.MaxLogSizeMB))
     Set-ObjectProperty -Object $Defaults -Name "LogRotateCount" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "LogRotateCount" $Defaults.LogRotateCount))
@@ -378,6 +382,8 @@ function Edit-Defaults {
     Set-ObjectProperty -Object $Defaults -Name "DateField" -Value ([string](Read-WizardValue "DateField (LastWriteTime/CreationTime)" $Defaults.DateField))
     Set-ObjectProperty -Object $Defaults -Name "Extensions" -Value (ConvertTo-WizardStringArray (Read-WizardValue "Extensions comma-separated" ($Defaults.Extensions -join ",")))
     Set-ObjectProperty -Object $Defaults -Name "FileAction" -Value ([string](Read-WizardValue "FileAction archive/delete" $DefaultFileAction))
+    Set-ObjectProperty -Object $Defaults -Name "IgnoreFileEnabled" -Value (ConvertTo-WizardBool (Read-WizardValue "IgnoreFileEnabled true/false" $DefaultIgnoreFileEnabled) $DefaultIgnoreFileEnabled)
+    Set-ObjectProperty -Object $Defaults -Name "IgnoreFile" -Value (Read-WizardValue "IgnoreFile empty=disabled" $DefaultIgnoreFile)
     Set-ObjectProperty -Object $Defaults -Name "MaxDepth" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "MaxDepth empty=unlimited" $Defaults.MaxDepth))
     Set-ObjectProperty -Object $Defaults -Name "MaxFilesPerRun" -Value (ConvertTo-WizardNullableInt (Read-WizardValue "MaxFilesPerRun empty=unlimited" $Defaults.MaxFilesPerRun))
     Set-ObjectProperty -Object $Defaults -Name "DeleteEmptyFolders" -Value (ConvertTo-WizardBool (Read-WizardValue "DeleteEmptyFolders true/false" $DefaultDeleteEmptyFolders) $DefaultDeleteEmptyFolders)
@@ -408,6 +414,8 @@ function Read-TargetValues {
     $ExistingOlderThanSeconds = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "OlderThanSeconds")) { $ExistingTarget.OlderThanSeconds } else { $null }
     $ExistingExtensions = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "Extensions")) { @($ExistingTarget.Extensions) -join "," } else { "" }
     $ExistingFileAction = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "FileAction")) { $ExistingTarget.FileAction } else { "" }
+    $ExistingIgnoreFileEnabled = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "IgnoreFileEnabled")) { $ExistingTarget.IgnoreFileEnabled } else { $null }
+    $ExistingIgnoreFile = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "IgnoreFile")) { $ExistingTarget.IgnoreFile } else { "" }
     $ExistingMaxDepth = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "MaxDepth")) { $ExistingTarget.MaxDepth } else { $null }
     $ExistingDeleteEmptyFolders = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "DeleteEmptyFolders")) { $ExistingTarget.DeleteEmptyFolders } else { $null }
     $ExistingProtectedEmptyFolders = if ($null -ne $ExistingTarget -and ($ExistingTarget.PSObject.Properties.Name -contains "ProtectedEmptyFolders")) { @($ExistingTarget.ProtectedEmptyFolders) -join "," } else { "" }
@@ -436,6 +444,16 @@ function Read-TargetValues {
     $FileAction = Read-WizardValue "FileAction override archive/delete empty=default" $ExistingFileAction
     if (-not [string]::IsNullOrWhiteSpace([string]$FileAction)) {
         Set-ObjectProperty -Object $Target -Name "FileAction" -Value ([string]$FileAction)
+    }
+
+    $IgnoreFileEnabled = Read-WizardValue "IgnoreFileEnabled override true/false empty=default" $ExistingIgnoreFileEnabled
+    if ($null -ne $IgnoreFileEnabled -and -not [string]::IsNullOrWhiteSpace([string]$IgnoreFileEnabled)) {
+        Set-ObjectProperty -Object $Target -Name "IgnoreFileEnabled" -Value (ConvertTo-WizardBool $IgnoreFileEnabled $true)
+    }
+
+    $IgnoreFile = Read-WizardValue "IgnoreFile override empty=default" $ExistingIgnoreFile
+    if (-not [string]::IsNullOrWhiteSpace([string]$IgnoreFile)) {
+        Set-ObjectProperty -Object $Target -Name "IgnoreFile" -Value ([string]$IgnoreFile)
     }
 
     $MaxDepth = ConvertTo-WizardNullableInt (Read-WizardValue "MaxDepth override empty=default" $ExistingMaxDepth)

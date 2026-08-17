@@ -87,6 +87,8 @@ function New-ArchiveTargetContext {
 
     $ArchiveRoot = Get-ArchiveRoot -SourceRoot $SourceRoot -Settings $Settings
     $CutoffDate = Get-CutoffDate -OlderThanSeconds $Settings.OlderThanSeconds
+    $IgnorePatterns = @(Get-ArchiveIgnorePatterns -SourceRoot $SourceRoot -IgnoreFile $Settings.IgnoreFile -Enabled:$Settings.IgnoreFileEnabled)
+    $IgnoreFilePath = Resolve-ArchiveIgnoreFilePath -SourceRoot $SourceRoot -IgnoreFile $Settings.IgnoreFile
 
     Write-ArchiveLog "------------------------------------------------------------" -LogFile $LogFile
     Write-ArchiveLog "CILJ: $TargetName" -LogFile $LogFile
@@ -97,6 +99,9 @@ function New-ArchiveTargetContext {
     Write-ArchiveLog "Ekstenzije: $($Settings.Extensions -join ', ')" -LogFile $LogFile
     if ($Settings.FileAction -ne "archive") {
         Write-ArchiveLog "Akcija nad fajlovima: $($Settings.FileAction)" -LogFile $LogFile
+    }
+    if ($Settings.IgnoreFileEnabled -and $IgnorePatterns.Count -gt 0) {
+        Write-ArchiveLog "Ignore file: $IgnoreFilePath ($($IgnorePatterns.Count) pravila)" -LogFile $LogFile
     }
     Write-ArchiveLog "Maksimalna dubina: $(if ($null -eq $Settings.MaxDepth) { 'neograniceno' } else { $Settings.MaxDepth })" -LogFile $LogFile
     if (-not $Settings.DeleteEmptyFolders -or @($Settings.ProtectedEmptyFolders).Count -gt 0) {
@@ -112,6 +117,9 @@ function New-ArchiveTargetContext {
         DateField   = $Settings.DateField
         Extensions  = $Settings.Extensions
         MaxDepth    = $Settings.MaxDepth
+        IgnorePatterns = $IgnorePatterns
+        IgnoreFile = $Settings.IgnoreFile
+        IgnoreFileEnabled = $Settings.IgnoreFileEnabled
     }
 
     $Files = @(Get-ArchivableFiles @FileSearchParams)

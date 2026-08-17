@@ -1,0 +1,6 @@
+[
+  { "Path": "data/Source/old.txt", "LastWriteTime": "2020-01-05T10:00:00Z" },
+  { "Path": "data/Source/ignored.bak", "LastWriteTime": "2020-01-05T10:00:00Z" },
+  { "Path": "data/Source/important.bak", "LastWriteTime": "2020-01-05T10:00:00Z" },
+  { "Path": "data/Source/skip/ignored-folder.txt", "LastWriteTime": "2020-01-05T10:00:00Z" }
+]

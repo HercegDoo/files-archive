@@ -297,6 +297,183 @@ function Test-ArchiveRelativePathPattern {
     return $NormalizedRelativePath -match $Regex
 }
 
+function Resolve-ArchiveIgnoreFilePath {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SourceRoot,
+
+        [AllowNull()]
+        [string]$IgnoreFile
+    )
+
+    if ([string]::IsNullOrWhiteSpace($IgnoreFile)) {
+        return $null
+    }
+
+    if ([System.IO.Path]::IsPathRooted($IgnoreFile)) {
+        return $IgnoreFile
+    }
+
+    return Join-Path $SourceRoot $IgnoreFile
+}
+
+function Get-ArchiveIgnorePatterns {
+    param(
+        [Parameter(Mandatory)]
+        [string]$SourceRoot,
+
+        [AllowNull()]
+        [string]$IgnoreFile,
+
+        [bool]$Enabled = $true
+    )
+
+    if (-not $Enabled) {
+        return @()
+    }
+
+    $IgnoreFilePath = Resolve-ArchiveIgnoreFilePath -SourceRoot $SourceRoot -IgnoreFile $IgnoreFile
+
+    if ([string]::IsNullOrWhiteSpace($IgnoreFilePath)) {
+        return @()
+    }
+
+    if (-not (Test-Path -LiteralPath $IgnoreFilePath -PathType Leaf)) {
+        return @()
+    }
+
+    return @(
+        Get-Content -LiteralPath $IgnoreFilePath -Encoding UTF8 |
+            ForEach-Object { ([string]$_).Trim() } |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_) -and
+                -not $_.StartsWith("#")
+            }
+    )
+}
+
+function Test-IsArchiveIgnoreFile {
+    param(
+        [Parameter(Mandatory)]
+        [System.IO.FileInfo]$File,
+
+        [Parameter(Mandatory)]
+        [string]$SourceRoot,
+
+        [AllowNull()]
+        [string]$IgnoreFile,
+
+        [bool]$Enabled = $true
+    )
+
+    if (-not $Enabled) {
+        return $false
+    }
+
+    $IgnoreFilePath = Resolve-ArchiveIgnoreFilePath -SourceRoot $SourceRoot -IgnoreFile $IgnoreFile
+
+    if ([string]::IsNullOrWhiteSpace($IgnoreFilePath)) {
+        return $false
+    }
+
+    return Test-IsSamePath -Left $File.FullName -Right $IgnoreFilePath
+}
+
+function ConvertTo-ArchiveIgnoreRegex {
+    param(
+        [Parameter(Mandatory)]
+        [string]$Pattern
+    )
+
+    $NormalizedPattern = $Pattern.Trim().Replace("\", "/")
+
+    if ($NormalizedPattern.StartsWith("!")) {
+        $NormalizedPattern = $NormalizedPattern.Substring(1)
+    }
+
+    $RootAnchored = $NormalizedPattern.StartsWith("/")
+    $DirectoryOnly = $NormalizedPattern.EndsWith("/")
+    $NormalizedPattern = $NormalizedPattern.Trim("/")
+
+    if ([string]::IsNullOrWhiteSpace($NormalizedPattern)) {
+        return $null
+    }
+
+    $ContainsSlash = $NormalizedPattern.Contains("/")
+    $EscapedPattern = [regex]::Escape($NormalizedPattern)
+    $EscapedPattern = $EscapedPattern.Replace("\*\*", ".*")
+    $EscapedPattern = $EscapedPattern.Replace("\*", "[^/]*")
+    $EscapedPattern = $EscapedPattern.Replace("\?", "[^/]")
+
+    if ($DirectoryOnly) {
+        if ($RootAnchored -or $ContainsSlash) {
+            return "^$EscapedPattern(/.*)?$"
+        }
+
+        return "(^|.*/)$EscapedPattern(/.*)?$"
+    }
+
+    if ($RootAnchored -or $ContainsSlash) {
+        return "^$EscapedPattern$"
+    }
+
+    return "(^|.*/)$EscapedPattern$"
+}
+
+function Test-ArchiveIgnoredRelativePath {
+    param(
+        [Parameter(Mandatory)]
+        [string]$RelativePath,
+
+        [AllowEmptyCollection()]
+        [string[]]$IgnorePatterns
+    )
+
+    if (@($IgnorePatterns).Count -eq 0) {
+        return $false
+    }
+
+    $NormalizedRelativePath = $RelativePath.Replace("\", "/").Trim("/")
+    $Ignored = $false
+
+    foreach ($Pattern in @($IgnorePatterns)) {
+        if ([string]::IsNullOrWhiteSpace([string]$Pattern)) {
+            continue
+        }
+
+        $PatternText = ([string]$Pattern).Trim()
+        $IsNegated = $PatternText.StartsWith("!")
+        $Regex = ConvertTo-ArchiveIgnoreRegex -Pattern $PatternText
+
+        if ($null -eq $Regex) {
+            continue
+        }
+
+        if ($NormalizedRelativePath -match $Regex) {
+            $Ignored = -not $IsNegated
+        }
+    }
+
+    return $Ignored
+}
+
+function Test-ArchiveIgnoredFile {
+    param(
+        [Parameter(Mandatory)]
+        [System.IO.FileInfo]$File,
+
+        [Parameter(Mandatory)]
+        [string]$SourceRoot,
+
+        [AllowEmptyCollection()]
+        [string[]]$IgnorePatterns
+    )
+
+    $RelativePath = Get-RelativeArchivePath -Path $File.FullName -Root $SourceRoot
+
+    return Test-ArchiveIgnoredRelativePath -RelativePath $RelativePath -IgnorePatterns $IgnorePatterns
+}
+
 function Test-ProtectedEmptyDirectory {
     param(
         [Parameter(Mandatory)]
@@ -434,7 +611,15 @@ function Get-ArchivableFiles {
         [string[]]$Extensions,
 
         [AllowNull()]
-        [object]$MaxDepth = $null
+        [object]$MaxDepth = $null,
+
+        [AllowEmptyCollection()]
+        [string[]]$IgnorePatterns = @(),
+
+        [AllowNull()]
+        [string]$IgnoreFile = $null,
+
+        [bool]$IgnoreFileEnabled = $true
     )
 
     if (Test-IsSamePath -Left $SourceRoot -Right $ArchiveRoot) {
@@ -454,8 +639,10 @@ function Get-ArchivableFiles {
                 $IsOldEnough = $ArchiveDate -lt $CutoffDate
                 $IsExtensionAllowed = Test-ExtensionAllowed -File $_ -Extensions $Extensions
                 $IsDepthAllowed = Test-FileDepthAllowed -File $_ -SourceRoot $SourceRoot -MaxDepth $MaxDepth
+                $IsIgnored = Test-ArchiveIgnoredFile -File $_ -SourceRoot $SourceRoot -IgnorePatterns $IgnorePatterns
+                $IsIgnoreFile = Test-IsArchiveIgnoreFile -File $_ -SourceRoot $SourceRoot -IgnoreFile $IgnoreFile -Enabled:$IgnoreFileEnabled
 
-                -not $IsInsideArchive -and $IsOldEnough -and $IsExtensionAllowed -and $IsDepthAllowed
+                -not $IsInsideArchive -and -not $IsIgnored -and -not $IsIgnoreFile -and $IsOldEnough -and $IsExtensionAllowed -and $IsDepthAllowed
             }
     )
 }
