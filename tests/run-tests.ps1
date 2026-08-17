@@ -647,6 +647,119 @@ function Invoke-WizardTestCase {
     return $true
 }
 
+function Invoke-CleanupSecondRunTest {
+    $CaseName = "cleanup-second-run"
+    $CaseResult = Join-Path $ResultsRoot $CaseName
+    $AppRoot = Join-Path (Join-Path $ScratchRoot $CaseName) "app"
+    $Diff = @()
+
+    if (Test-Path -LiteralPath $AppRoot) {
+        Remove-Item -LiteralPath $AppRoot -Recurse -Force
+    }
+
+    if (Test-Path -LiteralPath $CaseResult) {
+        Remove-Item -LiteralPath $CaseResult -Recurse -Force
+    }
+
+    New-Item -ItemType Directory -Path $AppRoot -Force | Out-Null
+    New-Item -ItemType Directory -Path $CaseResult -Force | Out-Null
+    Copy-Item -LiteralPath (Join-Path $ProjectRoot "Start-FileArchive.ps1") -Destination $AppRoot -Force
+    Copy-Item -LiteralPath (Join-Path $ProjectRoot "archive-lib") -Destination $AppRoot -Recurse -Force
+
+    $SourceFolder = Join-Path $AppRoot "data/Source/left/empty"
+    New-Item -ItemType Directory -Path $SourceFolder -Force | Out-Null
+    Set-Content -LiteralPath (Join-Path $SourceFolder "old.txt") -Value "old" -Encoding UTF8
+    $OldFile = Get-Item -LiteralPath (Join-Path $SourceFolder "old.txt")
+    $OldFile.LastWriteTimeUtc = ([datetime]::Parse("2020-01-01T00:00:00Z")).ToUniversalTime()
+
+    $ConfigPath = Join-Path $AppRoot "config.json"
+
+    @"
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive",
+    "DeleteEmptyFolders": false,
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "CleanupSecondRun",
+      "Path": "data/Source",
+      "Enabled": true
+    }
+  ]
+}
+"@ | Set-Content -LiteralPath $ConfigPath -Encoding UTF8
+
+    $FirstRunOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppRoot "Start-FileArchive.ps1") 2>&1
+    $FirstExitCode = $LASTEXITCODE
+    Write-Lines -Path (Join-Path $CaseResult "first-run-output.log") -Lines @($FirstRunOutput | ForEach-Object { [string]$_ })
+
+    if ($FirstExitCode -ne 0) {
+        $Diff += "FIRST_RUN_EXIT_CODE $FirstExitCode"
+    }
+
+    if (-not (Test-Path -LiteralPath $SourceFolder -PathType Container)) {
+        $Diff += "FIRST_RUN_EMPTY_FOLDER_NOT_LEFT"
+    }
+
+    @"
+{
+  "Defaults": {
+    "MaxLogSizeMB": 5,
+    "LogRotateCount": 2,
+    "OlderThanSeconds": 86400,
+    "DateField": "LastWriteTime",
+    "Extensions": [".txt"],
+    "ArchiveFolder": "Archive",
+    "DeleteEmptyFolders": true,
+    "TestMode": false
+  },
+  "Targets": [
+    {
+      "Name": "CleanupSecondRun",
+      "Path": "data/Source",
+      "Enabled": true
+    }
+  ]
+}
+"@ | Set-Content -LiteralPath $ConfigPath -Encoding UTF8
+
+    $SecondRunOutput = & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $AppRoot "Start-FileArchive.ps1") 2>&1
+    $SecondExitCode = $LASTEXITCODE
+    Write-Lines -Path (Join-Path $CaseResult "second-run-output.log") -Lines @($SecondRunOutput | ForEach-Object { [string]$_ })
+
+    if ($SecondExitCode -ne 0) {
+        $Diff += "SECOND_RUN_EXIT_CODE $SecondExitCode"
+    }
+
+    if (Test-Path -LiteralPath $SourceFolder -PathType Container) {
+        $Diff += "SECOND_RUN_EMPTY_FOLDER_STILL_EXISTS"
+    }
+
+    $LogText = Get-ArchiveLogText -LogsRoot (Join-Path $AppRoot "Logs") -ExtractionRoot (Join-Path $CaseResult "expanded-logs")
+
+    if (-not $LogText.Contains("Obrisano praznih foldera [CleanupSecondRun]: 2")) {
+        $Diff += "SECOND_RUN_CLEANUP_LOG_MISSING"
+    }
+
+    Write-Lines -Path (Join-Path $CaseResult "diff.txt") -Lines $Diff
+
+    if ($Diff.Count -gt 0) {
+        Write-Host "FAIL $CaseName"
+        $Diff | ForEach-Object { Write-Host "  $_" }
+        return $false
+    }
+
+    Write-Host "PASS $CaseName"
+    return $true
+}
+
 function Invoke-SingleFileBuildTest {
     $CaseName = "single-file-build"
     $CaseResult = Join-Path $ResultsRoot $CaseName
@@ -922,6 +1035,10 @@ if (Test-Path -LiteralPath $WizardCasesRoot -PathType Container) {
             $Failed++
         }
     }
+}
+
+if (-not (Invoke-CleanupSecondRunTest)) {
+    $Failed++
 }
 
 if (-not (Invoke-SingleFileBuildTest)) {

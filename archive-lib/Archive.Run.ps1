@@ -306,18 +306,16 @@ function Invoke-ArchiveRun {
                 }
             }
 
-            if (($Context.Result.Moved + $Context.Result.Deleted) -gt 0) {
-                if ($Context.Settings.DeleteEmptyFolders) {
-                    $RemovedDirectories = Remove-EmptySourceDirectories `
-                        -SourceRoot $Context.SourceRoot `
-                        -ArchiveRoot $Context.ArchiveRoot `
-                        -ProtectedPatterns @($Context.Settings.ProtectedEmptyFolders)
+            if ($Context.Settings.DeleteEmptyFolders) {
+                $RemovedDirectories = Remove-EmptySourceDirectories `
+                    -SourceRoot $Context.SourceRoot `
+                    -ArchiveRoot $Context.ArchiveRoot `
+                    -ProtectedPatterns @($Context.Settings.ProtectedEmptyFolders)
 
-                    Write-ArchiveLog "Obrisano praznih foldera [$($Context.TargetName)]: $RemovedDirectories" -LogFile $LogFile
-                }
-                else {
-                    Write-ArchiveLog "Brisanje praznih foldera iskljuceno [$($Context.TargetName)]." -LogFile $LogFile
-                }
+                Write-ArchiveLog "Obrisano praznih foldera [$($Context.TargetName)]: $RemovedDirectories" -LogFile $LogFile
+            }
+            else {
+                Write-ArchiveLog "Brisanje praznih foldera iskljuceno [$($Context.TargetName)]." -LogFile $LogFile
             }
         }
     }
