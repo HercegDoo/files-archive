@@ -1,0 +1,5 @@
+[
+  { "Path": "data/Source/delete-me.txt", "LastWriteTime": "2020-01-05T10:00:00Z" },
+  { "Path": "data/Source/keep-me.txt", "LastWriteTime": "2020-01-05T10:00:00Z" },
+  { "Path": "data/Source/safe/keep-safe.txt", "LastWriteTime": "2020-01-05T10:00:00Z" }
+]

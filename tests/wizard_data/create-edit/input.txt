@@ -6,6 +6,8 @@
 CreationTime
 .txt,.pdf
 archive
+true
+.archiveignore
 3
 100
 true
@@ -27,6 +29,8 @@ true
 30
 .pdf,.docx
 archive
+true
+.customignore
 2
 true
 keep
@@ -34,6 +38,8 @@ keep
 DisabledSource
 data/Disabled
 true
+
+
 
 
 
@@ -50,6 +56,8 @@ true
 120
 .txt
 archive
+true
+.editedignore
 1
 true
 keep-edited

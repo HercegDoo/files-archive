@@ -17,6 +17,8 @@ function New-ArchiveSettings {
     $Properties.DateField = "LastWriteTime"
     $Properties.Extensions = @(".txt")
     $Properties.FileAction = "archive"
+    $Properties.IgnoreFileEnabled = $true
+    $Properties.IgnoreFile = ".archiveignore"
     $Properties.MaxDepth = $null
     $Properties.MaxFilesPerRun = $null
     $Properties.DeleteEmptyFolders = $true
@@ -247,6 +249,41 @@ function Update-ArchiveSettings {
 
     if ((Test-ConfigProperty $Source "DeleteOnly") -and [bool]$Source.DeleteOnly) {
         $Settings.FileAction = "delete"
+    }
+
+    if (Test-ConfigProperty $Source "IgnoreFileEnabled") {
+        $Settings.IgnoreFileEnabled = [bool]$Source.IgnoreFileEnabled
+    }
+
+    if (Test-ConfigProperty $Source "ignore_file_enabled") {
+        $Settings.IgnoreFileEnabled = [bool]$Source.ignore_file_enabled
+    }
+
+    if (Test-ConfigProperty $Source "IgnoreFile") {
+        if ([string]::IsNullOrWhiteSpace([string]$Source.IgnoreFile)) {
+            $Settings.IgnoreFile = $null
+        }
+        else {
+            $Settings.IgnoreFile = [string]$Source.IgnoreFile
+        }
+    }
+
+    if (Test-ConfigProperty $Source "ArchiveIgnoreFile") {
+        if ([string]::IsNullOrWhiteSpace([string]$Source.ArchiveIgnoreFile)) {
+            $Settings.IgnoreFile = $null
+        }
+        else {
+            $Settings.IgnoreFile = [string]$Source.ArchiveIgnoreFile
+        }
+    }
+
+    if (Test-ConfigProperty $Source "ignore_file") {
+        if ([string]::IsNullOrWhiteSpace([string]$Source.ignore_file)) {
+            $Settings.IgnoreFile = $null
+        }
+        else {
+            $Settings.IgnoreFile = [string]$Source.ignore_file
+        }
     }
 
     if (Test-ConfigProperty $Source "MaxNestedDepth") {

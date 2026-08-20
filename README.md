@@ -306,6 +306,8 @@ The FSRM task account must have read access to source folders and write access t
     "DateField": "LastWriteTime",
     "Extensions": [".txt", ".pdf", ".docx", ".bmp"],
     "FileAction": "archive",
+    "IgnoreFileEnabled": true,
+    "IgnoreFile": ".archiveignore",
     "MaxDepth": null,
     "MaxFilesPerRun": 10000,
     "DeleteEmptyFolders": true,
@@ -328,6 +330,8 @@ The FSRM task account must have read access to source folders and write access t
       "OlderThanSeconds": 30,
       "Extensions": [".txt"],
       "FileAction": "archive",
+      "IgnoreFileEnabled": true,
+      "IgnoreFile": ".archiveignore",
       "DeleteEmptyFolders": true,
       "ProtectedEmptyFolders": [
         "templates/**",
@@ -361,6 +365,8 @@ The FSRM task account must have read access to source folders and write access t
 | `DateField` | Date used for age checks and `{year}` / `{month}` archive folders. Supported values: `LastWriteTime` and `CreationTime`. Default: `LastWriteTime`. |
 | `Extensions` | File extensions that are allowed to be archived. |
 | `FileAction` | What to do with eligible files: `archive` moves files into the archive; `delete` permanently deletes them. Default: `archive`. Aliases: `Action`, `action`; `DeleteOnly: true` is also supported. |
+| `IgnoreFileEnabled` | Enables per-target ignore file processing. Default: `true`. Alias: `ignore_file_enabled`. |
+| `IgnoreFile` | Ignore file path/name used for this target. Default: `.archiveignore` in the target root. Relative paths are resolved under the target `Path`; absolute paths are supported. Aliases: `ArchiveIgnoreFile`, `ignore_file`. |
 | `MaxDepth` | Optional maximum folder depth to scan under the source folder. Default is `null`, which means unlimited. Root files have depth `0`; `Folder1\file.txt` has depth `1`; `Folder1\Folder2\Folder3\file.txt` has depth `3`. |
 | `MaxFilesPerRun` | Optional maximum number of eligible files to process in one run. Default is `null`, which means unlimited. The alias `max_files_per_run` is also supported. Files are sorted by `CreationTime` ascending before the limit is applied, so the oldest files are processed first. |
 | `DeleteEmptyFolders` | Controls whether empty source subfolders are deleted after successful moves. Default: `true`. Aliases: `CleanupEmptyFolders`, `delete_empty_folders`. |
@@ -420,6 +426,72 @@ The delete action uses the same filtering rules as archive mode:
 - `TestMode`
 
 Use `TestMode: true` first. In test mode the script logs `TEST DELETE` entries and does not physically delete files.
+
+## Ignore Files
+
+Each target can have its own ignore file. By default, the script looks for this file in the target root:
+
+```text
+.archiveignore
+```
+
+Files matched by `.archiveignore` are excluded before `FileAction` is applied. That means ignored files are neither archived nor deleted.
+
+The ignore file itself is also protected. The script never archives or deletes the configured ignore file, even if its name/extension would otherwise match `Extensions`.
+
+Example target:
+
+```json
+{
+  "Name": "ProductionFiles",
+  "Path": "D:\\Production",
+  "Enabled": true,
+  "FileAction": "archive",
+  "IgnoreFile": ".archiveignore"
+}
+```
+
+Example `D:\Production\.archiveignore`:
+
+```gitignore
+# ignore all backups
+*.bak
+
+# ignore an entire folder
+temp/
+
+# allow this one backup file again
+!important.bak
+```
+
+Supported syntax:
+
+- empty lines are ignored
+- `#` starts a comment
+- `*`, `?`, and `**` are supported
+- a trailing `/` matches a folder and its contents
+- `!pattern` negates a previous match
+- patterns are evaluated in order, so later rules override earlier rules
+
+If a target needs a different file:
+
+```json
+{
+  "Name": "OnlyThisTarget",
+  "Path": "D:\\Somewhere",
+  "IgnoreFile": ".myarchiveignore"
+}
+```
+
+To disable ignore file processing:
+
+```json
+{
+  "Name": "NoIgnore",
+  "Path": "D:\\Somewhere",
+  "IgnoreFileEnabled": false
+}
+```
 
 ## Max Files Per Run
 
